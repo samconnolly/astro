@@ -1,0 +1,97 @@
+# Creates a power spectrum from a lightcurve
+# by Sam Connolly 
+# Does not take into account sampling patterns (on purpose!)
+
+# modules
+import numpy as np
+
+# power spectrum fourier transform function ----------------
+def powcaled(flux):
+
+	ff = np.fft.fft(flux)
+	np = len(ff)
+	return ff, np
+      
+def powcal(time, flux, bwidth):
+
+	avflux = np.mean(flux)
+	dt= time[-1]-time[0] 
+	df= dt**(-1)
+
+	ff=np.array([])
+	npoints = len(flux)
+	nhi= int(0.5*len(time))
+
+	fr=np.zeros(nhi)
+	fi=np.zeros(nhi)
+      
+	for k in range(nhi):
+	      		
+		a=2*np.pi*(k+1)*df
+
+		for m in range(npoints):
+        
+			c=np.cos(a*time[m])
+			s=np.sin(a*time[m])
+			fr[k]+=((flux[m]-avflux)*c)
+			fi[k]+=((flux[m]-avflux)*s)
+        
+		ff = np.append(ff, ( (2.0*bwidth)/ ( (avflux**2)*(npoints) ) )* (fr[k]**2+fi[k]**2))
+        	 
+	return ff, nhi
+# ---------------------------------------------------------------
+def ipowcal(time, flux, bwidth):
+
+	avflux = np.mean(flux)
+	dt= time[-1]-time[0] 
+	df= dt**(-1)
+
+	ff=np.array([])
+	npoints = len(flux)
+	nhi= int(0.5*len(time))
+
+	fr=np.zeros(nhi)
+	fi=np.zeros(nhi)
+      
+	for k in range(nhi):
+	      		
+		a=2*np.pi*(k+1)*df
+
+		for m in range(npoints):
+        
+			c=np.cos(a*time[m])
+			s=np.sin(a*time[m])
+			fr[k]+=((flux[m]-avflux)*c)
+			fi[k]+=((flux[m]-avflux)*s)
+        
+		ff = np.append(ff, ( (2.0*bwidth)/ ( (avflux**2)*(npoints) ) )* (fr[k]**2-fi[k]**2))
+        	 
+	return ff, nhi
+
+# -- Logarithmising function ----------------------------------------
+      
+def binps(nhi,freq,dff):
+
+	
+	bff   = []
+	bfreq = []
+
+	for i1 in range(nhi):
+	
+		bff.append(np.log10(dff[i1]) )
+		bfreq.append(np.log10(freq[i1]))
+
+	return bfreq, bff       
+
+# -------------------------------------------------------------------     
+      
+
+
+
+
+
+
+
+
+
+
