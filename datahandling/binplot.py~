@@ -1,0 +1,134 @@
+# plot.py
+# Sam Connolly 13/02/2013
+
+#===============================================================================
+# Simple, generic plotting programme to plot any two columns from an ascii data
+# table, with errors, ignoring any header
+#===============================================================================
+
+# Import packages
+
+import pylab as plt
+import matplotlib
+
+#================ PARAMETERS ===================================================
+
+# read variables
+header = 1 # number of header lines to ignore
+single = False # plot sinlge column of data?
+log = False # log plot?
+
+xcolumn, ycolumn = 2, 3 # column numbers to plot
+xerrcolumn, yerrcolumn = None,None # column numbers for errors
+
+labels = True		# data labels?
+labelcolumn = 1		# data label column
+
+#   File routes
+route            = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/"\
+						+ "lightcurve/refined/"
+
+# file names
+infilename 	= "NGC1365_lcurve_4_0.5-10keV.qdp"
+
+#===============================================================================
+
+# create file route
+location  = route+infilename
+
+# read data intoarray
+
+start = 0
+
+infile= open(location, 'r')
+
+for line in infile:
+	
+	linedata = line.split()
+
+	if start == header:
+		columns = len(linedata)
+		data = [[] for x in range(columns)]
+
+	if start >= header:
+		for column in range(columns):
+			if len(linedata) == columns:
+				data[column].append(float(linedata[column]))
+		
+	start += 1
+
+infile.close()
+	
+xcolumn -= 1 
+ycolumn -= 1 
+
+if xerrcolumn:
+	xerrcolumn -= 1 
+	xerrs = data[xerrcolumn]
+
+else:
+	xerrs = None
+
+if single == False:
+
+	if yerrcolumn:
+		yerrcolumn -= 1
+		yerrs = data[yerrcolumn]
+
+	else:
+		yerrs = None
+
+# plot with pylab
+
+
+
+if log == False:
+
+	if single == False:
+
+		plt.scatter(data[xcolumn],data[ycolumn])
+		#plt.errorbar(data[xcolumn],data[ycolumn],xerr = xerrs, yerr= yerrs)
+	else:
+
+		axisrange = range(len(data[xcolumn]))
+		plt.scatter(axisrange, data[xcolumn])
+
+	if labels:
+
+		labelcolumn -= 1
+
+		for index in range(len(data[0])):
+			plt.annotate(data[labelcolumn][index], 
+					xy = (data[xcolumn][index], data[ycolumn][index]), 
+					xytext = (-20,20),
+					textcoords = 'offset points', ha = 'right', va = 'bottom',
+					bbox = dict(boxstyle = 'round,pad=0.5', fc = 'blue', alpha = 0.5),
+					arrowprops = dict(arrowstyle = '->', 
+					connectionstyle = 'arc3,rad=0'))
+
+if log == True:
+
+	
+	fig = plt.figure()
+
+	ax = fig.add_subplot(1,1,1)
+	ax.set_yscale('log')
+	ax.set_xscale('log')
+
+	ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+	if single == False:
+
+		plt.plot(data[xcolumn],data[ycolumn])
+
+	else:
+
+		axisrange = range(len(data[xcolumn]))
+		plt.plot(axisrange,data[xcolumn])
+
+plt.show()
+
+
+
+
+

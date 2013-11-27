@@ -1,0 +1,74 @@
+import pyfits
+import os
+
+dataroute = "/net/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/spectra/gti/"
+
+infofilename   = "NGC1365_lcurve_gti_0.5-10keV.txt"
+outputfilename = "allinfo.txt"
+
+save = False
+ 
+#------------------ MAIN PROG --------------------------------------------------
+
+here = os.getcwd()
+
+os.chdir(dataroute)
+
+spectra = []
+
+for files in os.listdir("."):
+    if "src" in files and "pha" in files:
+        spectra.append(files)
+
+info = open(dataroute+infofilename)
+
+obsids    = []
+data	  = []
+
+start = 0
+
+for line in info:
+
+	if start == 1:
+		datum = line.split()
+
+		data.append(datum)
+		obsids.append(datum[0])
+
+	start = 1
+
+orderspectra = []
+
+for spectrum in spectra:
+
+	header = pyfits.open(spectrum)
+
+	obsid  = header[0].header["OBS_ID"]
+
+	for n in range(len(obsids)):
+
+		if obsid is obsids[n]:
+
+			print obsid, obsids[n]
+			orderspectra.append(spectra[n])
+
+
+
+if save:
+
+	outfile  = open(dataroute+outputfilename,'w')
+
+	for n in range(len(orderspectra)):
+
+		outfile.write(data[n])
+		outfile.write("\t")
+		outfile.write(orderspectra[n])
+
+		outfile.write("\n")
+
+
+os.chdir(here)
+
+
+
+

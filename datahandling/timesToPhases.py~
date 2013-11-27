@@ -1,0 +1,47 @@
+"""
+timesToPhases.py 
+
+Sam Connolly 19/8/13
+
+Convert your exposure times to orbital phases!
+
+!!! THIS IS ALL IN HJD !!! 
+Apparently that's a good thing to use for ephemerides - to calculate it, use: 
+http://www.physics.sfasu.edu/astro/javascript/hjd.html
+
+"""
+
+import numpy as np
+
+
+obs = 1
+
+while obs != 0:
+
+	# obs time
+
+	try:
+		obs = float(raw_input("HJD of observation:"))
+	except ValueError:
+		obs = 0
+
+	# ephemeris time
+
+	eph = 2452813.495
+
+	# Orbital Period
+
+	period = 0.19383351
+
+	# phase
+
+	elapsed = obs - eph
+
+	orbits = int(elapsed/period)
+
+	phase = (elapsed/period) - orbits
+
+	if obs != 0:
+		print phase
+
+

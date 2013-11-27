@@ -1,0 +1,15 @@
+#asymmetricerrors.py
+
+# test how they work...
+
+import numpy as np
+from pylab import *
+
+a = range(10)
+b = range(10)
+c = [1,4,2,5,2,6,3,5,4,2]
+d = [3,2,5,3,1,5,3,2,5,3]
+e = [c,d]
+errorbar(a,b, xerr = e)
+
+show()
