@@ -1,0 +1,142 @@
+# wabs.py
+# Sam Connolly 18/02/2013
+
+#===============================================================================
+# Working out how wabs in xspec works - calculate cross sections at each energy
+#===============================================================================
+
+# Import packages
+
+from pylab import *
+import numpy as np
+
+#================ PARAMETERS ===================================================
+
+# read variables
+header = 1 # number of header lines to ignore
+
+
+#   File routes
+route            = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/"\
+						+"xraySpectralModelling/"
+
+# file names
+infilename 	= "absorptionXsections.dat"
+
+#===============================================================================
+
+# create file route
+location  = route+infilename
+
+# read data intoarray
+
+Emin = []
+Emax = []
+c0   = []
+c1   = []
+c2   = []
+
+infile= open(location, 'r')
+
+start = 0
+
+for line in infile:
+	
+	if start >= header:
+
+		cEmin, cEmax, cc0, cc1, cc2 = line.split()
+
+		Emin.append(float(cEmin))
+		Emax.append(float(cEmax))
+		c0.append(float(cc0))
+		c1.append(float(cc1))
+		c2.append(float(cc2))
+
+	start += 1
+
+infile.close()
+
+#============= Cross sections - (c0 + c1*E + c2*E^2)*E^-3 ======================
+
+xsec = np.array([])
+
+for energy in range(len(Emin)):
+
+	xsec = np.append(xsec, ( c0[energy] + c1[energy]*Emin[energy]\
+					 + c2[energy]*(Emin[energy]**2) ) * (Emin[energy]**(-3)) )
+
+
+#============= Absorption ======================================================
+
+nH = 0.1 # in 10^24 cm^-2
+
+
+absorption = np.exp(-nH*xsec)
+
+
+#============== Create Power Law ===============================================
+
+energy = np.arange(0.03,7.0,0.01)
+
+norm = 1.0E-3
+index = 1.8
+
+power = norm*(energy**(-index))
+
+
+#============= Create equivalent absorption ====================================
+
+pabsorption = np.array([])
+
+for e in energy:
+
+	for m in range(len(Emin)-1):
+
+		if e >= Emin[m] and e < Emax[m]:
+
+				interpol = np.log(e/Emin[m]) * \
+							(np.log(absorption[m+1]/absorption[m]) / \
+								np.log(Emax[m] / Emin[m]) ) 
+
+				pabsorption = np.append(pabsorption,\
+								np.exp(np.log(absorption[m]) + interpol) )
+
+#============ Create total spectrum (abs + non-abs) ============================
+
+abspower = power*pabsorption
+
+norm2 = 1.0E-5
+
+unabspower = norm2*(energy**(-index))
+
+total = abspower + unabspower
+
+#============= Plotting ========================================================
+logEmin = np.log(Emin)
+logenergy = np.log(energy)
+logpower = np.log(power)
+logunabspower = np.log(unabspower)
+logabspower = np.log(abspower)
+logtotal = np.log(total)
+
+print Emin
+print xsec
+
+subplot(3,1,1)
+plot(logenergy, logpower)
+plot(logenergy, logunabspower)
+
+subplot(3,1,2)
+plot(logenergy, logabspower)
+plot(logenergy, logunabspower)
+
+subplot(3,1,3)
+plot(logenergy, logtotal)
+
+
+show()
+
+
+
+
+

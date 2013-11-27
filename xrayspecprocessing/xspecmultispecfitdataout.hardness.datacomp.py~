@@ -1,0 +1,469 @@
+# xspecmultispecfitdataout.py
+# Sam Connolly 11/03/13
+
+# Programme to extract xspec model fluxes and the corresponding energies of 
+# multiple models fitted to real spectra in a saved xspec file of spectra and
+# fits, or a seperate model file, ignoring ignored channels or chosen energies, 
+# then calculate, save and plot hardness V count rate and hard, soft counts
+
+import os
+import pylab as plt
+import matplotlib
+import numpy as np
+
+# ============== PARAMATERS ====================================================
+
+# file route - directory containing spectra and to contain output
+route    = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/spectra/summed/"
+
+# output data file name
+outfile 	= "multispecfithardness.dat"
+
+# input xspec file(s)
+infile = "multispec.xcm"			# spectrum file
+modelfile = None	# 'None' if same as infile
+
+# energy range (overrides those ignored/noticed if choose == True) 
+# (used for plots)
+
+choose = True
+cemin = 0.5
+cemax = 10.0
+
+hardnesssplit = 2.0
+
+# graph?
+graph = True
+
+
+#--- Real Data -----------------------------------------------------------------
+
+# Object name
+
+objectname = "NGC1365" 
+
+#   File routes
+fileroute           	= \
+"/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/lightcurve"
+
+times = [0,7000]
+
+softdatanorm = 1. #0.48		# normalisations to data count rate..
+harddatanorm = 1. #0.125
+#softdatanorm = 1.739		# normalisations to data count rate..
+#harddatanorm = 0.48065
+
+# ==============================================================================
+
+# --- Run Xspec modelling macro and save results ---
+
+# temporary file names
+macrofile  		= "tmpmacro.tcl"
+tmpfileenergy   = "tmpenergy"
+tmpfilevalue   	= "tmpvalue"
+tmpfilenotice   = "tmpnotice"
+tmpfilegrpnum  	= "tmpgrpnum.dat"
+
+# set file locations
+macrolocation 		= route + macrofile
+outlocation   		= route + outfile
+tmplocationenergy  	= route + tmpfileenergy
+tmplocationvalue  	= route + tmpfilevalue  
+tmplocationnotice  	= route + tmpfilenotice   
+tmplocationgrpnum  	= route + tmpfilegrpnum   
+
+here = os.getcwd()
+
+# tcl macro to run on spectra
+tclmacro = \
+'puts "Starting macro..."\n\
+cpd null\n\
+@{0}\n'.format(infile)
+
+if modelfile:
+
+	tclmacro = tclmacro + '@{0}\n'.format(modelfile)
+
+tclmacro = tclmacro + \
+'query yes \n\
+fit \n\
+set outfile [open {0} w]\n\
+tclout datagrp\n\
+set grpnum $xspec_tclout\n\
+puts $outfile $grpnum\n'.format(tmpfilegrpnum)
+
+tclmacro = tclmacro + \
+'set i 1\n\
+while {$i <= $grpnum} {;\n'
+
+tclmacro = tclmacro + \
+'puts "spectrum $i of $grpnum$"\n\
+set outfile [open {0}$i.dat w]\n\
+tclout energies $i\n\
+puts $outfile $xspec_tclout\n\
+set outfile [open {1}$i.dat w]\n\
+tclout modval $i\n\
+puts $outfile $xspec_tclout \n\
+set outfile [open {2}$i.dat w]\n\
+tclout noticed energy $i\n\
+puts $outfile $xspec_tclout \n'\
+.format(tmpfileenergy,tmpfilevalue,tmpfilenotice)
+
+tclmacro = tclmacro + \
+'; incr i;} \n\
+quit\n'
+
+#print tclmacro
+
+# create temporary macro file
+macrofile= open(macrolocation, 'w')
+macrofile.write(str(tclmacro))
+macrofile.close()
+
+# run tcl script in xspec
+os.chdir(route)
+os.system("headasinit")
+os.system("xspec - tmpmacro.tcl")
+
+# delete temporary macro
+os.remove(macrolocation)
+
+# ---- create output file from tmp data files ----
+
+# extract number of spectra
+
+grpnumfile = open(tmplocationgrpnum, 'r')
+
+for line in grpnumfile:
+	grpnum = int(line.split()[0])
+
+grpnumfile.close()
+
+# delete temporary data file
+os.remove(tmplocationgrpnum)
+
+# read in data from tmp data files
+
+flux    = [[] for i in range(grpnum)]
+energy  = [[] for i in range(grpnum)]
+indices = [[] for i in range(grpnum)]
+
+for spec in range(0,grpnum):
+
+	tmplocation = tmplocationnotice + str(spec + 1) + ".dat"
+
+	notice = open(tmplocation, 'r')
+
+	for line in notice:
+		noticed = line.split()[0]
+		 
+	notice.close()
+
+	# delete temporary data file
+	os.remove(tmplocation)
+
+	emin = ""
+	emax = ""
+	dash = False
+
+	for character in noticed:
+
+		if dash == True:
+			emax = emax + character
+
+		if dash == False:
+			if character == "-":
+				dash = True
+
+			else:
+				emin = emin + character
+
+	emin = float(emin)
+	emax = float(emax)
+
+	if choose == True:
+
+		emin = cemin
+		emax = cemax
+
+	tmplocation = tmplocationenergy + str(spec + 1) + ".dat"
+
+	energyf = open(tmplocation, 'r')
+
+	for line in energyf:
+		linedata = line.split()
+	
+		for index in range(len(linedata)):
+		
+			if float(linedata[index]) >= emin and float(linedata[index]) <= emax:	
+				energy[spec].append(float(linedata[index]))
+				indices[spec].append(index)
+
+	energyf.close()
+
+	# delete temporary data file
+	os.remove(tmplocation)
+
+	tmplocation = tmplocationvalue + str(spec + 1) + ".dat"
+
+	fluxf = open(tmplocation, 'r')
+
+	for line in fluxf:
+		linedata = line.split()
+
+		for index in indices[spec]:
+			flux[spec].append(float(linedata[index])*200.0) # *200 converts from 
+													 # cnts cm^-2 s^-1 bin^-1 to 
+													 # cnts cm^-2 s^-1 keV^-1
+
+	fluxf.close()
+
+	# delete temporary data file
+	os.remove(tmplocation)
+
+#print grpnum
+#print len(energy), len(flux), len(energy[0]), len(flux[0])
+
+# create new, combined data file
+
+output = open(outlocation, 'w')
+
+for x in range(grpnum):
+	output.write("Energy {0}\t".format(x +1) + "Flux {0}\t".format(x +1))	
+
+output.write("\n")
+
+for i in range(len(flux[0])):
+	for j in range(grpnum):
+		output.write(str(energy[j][i]))
+		output.write("\t")
+		output.write(str(flux[j][i]))
+		output.write("\t")
+
+	output.write("\n")
+
+output.close()
+
+#return to original directory
+os.chdir(here)
+
+# calculate hardness
+
+splitindex = 0
+
+for i in range(len(energy[0])):
+
+	if energy[0][i] < hardnesssplit:
+		if i > splitindex:
+
+			splitindex = i
+
+splitindex += 1
+
+# integration by trapezium rule
+
+hard 		= []
+soft 		= []
+hardness 	= []
+
+for y in range(grpnum):
+	s = np.trapz(flux[y][:splitindex])
+	h = np.trapz(flux[y][splitindex:])
+
+	soft.append(s)
+	hard.append(h)
+	hardness.append((h - s) / (h + s))
+
+# integration by summation
+
+#shard 		= []
+#ssoft 		= []
+#shardness 	= []
+
+#for y in range(grpnum):
+#	s = sum(flux[y][:splitindex])
+#	h = sum(flux[y][splitindex:])
+#
+#	ssoft.append(s)
+#	shard.append(h)
+#	shardness.append((h - s) / (h + s))
+
+# ==============================================================================
+
+#				Real Data
+
+# ==============================================================================
+
+energysoftroute  	= "/refined/"
+energyhardroute  	= "/refined/"
+
+# file names
+energysoftfname 	= objectname+"_lcurve_3_gti_0.5-2keV.qdp"
+energyhardfname		= objectname+"_lcurve_3_gti_2-10keV.qdp"
+
+
+# create file routes
+energysoftlocation 		= fileroute+energysoftroute+energysoftfname
+energyhardlocation 		= fileroute+energyhardroute+energyhardfname
+
+
+# Function to calculate hardness and error
+
+def hardnessflux(tmin,tmax):
+
+	# read data into 2-D arrays
+	start = 0
+
+	softtime    = np.array([])
+	softflux    = np.array([])
+	softfluxerr = np.array([])
+	# soft
+	energysoftin= open(energysoftlocation, 'r')
+
+	for x in energysoftin:
+	
+		currtime, currflux, currfluxerr = x.split()
+		if start == 1:
+			if float(currtime) >= tmin and float(currtime) <= tmax:
+				softtime    = np.append(softtime, float(currtime))
+				softflux    = np.append(softflux, float(currflux)*softdatanorm)
+				softfluxerr = np.append(softfluxerr, \
+												float(currfluxerr)*softdatanorm)	
+		start = 1
+
+	energysoftin.close()
+	# hard
+	start = 0
+
+	hardtime    = np.array([])
+	hardflux    = np.array([])
+	hardfluxerr = np.array([])
+
+	energyhardin= open(energyhardlocation, 'r')
+
+	for x in energyhardin:
+	
+		currtime, currflux, currfluxerr = x.split()
+		if start == 1:
+			if float(currtime) >= tmin and float(currtime) <= tmax:
+				hardtime    = np.append(hardtime, float(currtime))
+				hardflux    = np.append(hardflux, float(currflux)*harddatanorm)
+				hardfluxerr = np.append(hardfluxerr, \
+											float(currfluxerr)*harddatanorm)		
+		start = 1
+
+	energyhardin.close()
+
+
+
+	hardness    = hardflux/softflux
+	hardnesserr = hardness*(np.sqrt((hardfluxerr/hardflux)**2 + \
+			(softfluxerr/softflux)**2))
+
+	# Calculate modified hardness and error (H - S / H + S)
+
+	modhardness = (hardflux-softflux)/(hardflux+softflux)
+	sumerr = np.sqrt(hardfluxerr**2 + softfluxerr**2)
+	modhardnesserr = modhardness*(np.sqrt(\
+	(sumerr/(hardflux-softflux))**2 + (sumerr/(hardflux+softflux))**2 ) )
+
+	# sort modified hardnesses and soft flux according to hard flux
+
+	modfluxhard = [[],[],[],[],[],[]]
+	start = 0
+
+	for value in range(len(modhardness)):
+		# if it isn't the first value...
+		if start !=0:
+			for comp in range(len(modfluxhard[0])): # for each value 
+							# from the bottom up...
+				if hardflux[value] <= modfluxhard[0][comp]:# add 
+						     						 # below value if less/equal
+					modfluxhard[0].insert(comp,hardflux[value])
+					modfluxhard[1].insert(comp,hardfluxerr[value])
+					modfluxhard[2].insert(comp,softflux[value])
+					modfluxhard[3].insert(comp,softfluxerr[value])
+					modfluxhard[4].insert(comp,modhardness[value])
+					modfluxhard[5].insert(comp,modhardnesserr[value])
+					break
+				if comp == len(modfluxhard[0]) -1:  # add after last 
+								 					# element if > than all
+					modfluxhard[0].append(hardflux[value])
+					modfluxhard[1].append(hardfluxerr[value])
+					modfluxhard[2].append(softflux[value])
+					modfluxhard[3].append(softfluxerr[value])
+					modfluxhard[4].append(modhardness[value])
+					modfluxhard[5].append(modhardnesserr[value])
+
+		# if it is the first value, just fill that stuff in
+		if start == 0:
+			modfluxhard[0].append(hardflux[value])
+			modfluxhard[1].append(hardfluxerr[value])
+			modfluxhard[2].append(softflux[value])
+			modfluxhard[3].append(softfluxerr[value])
+			modfluxhard[4].append(modhardness[value])
+			modfluxhard[5].append(modhardnesserr[value])
+			start = 1
+		
+	totalflux = hardflux + softflux
+
+	return modfluxhard, totalflux, hardtime
+
+# run!
+
+modfluxhard, totalflux, time = hardnessflux(times[0],times[1])
+
+#================== plot data (logplot) ========================================
+
+if graph:
+
+	# model spectra
+	fig = plt.figure()
+
+	ax = fig.add_subplot(3,1,1)
+
+	ax.set_yscale('log')
+	ax.set_xscale('log')
+
+	ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+	plt.title("modelled spectra")
+	plt.ylabel("photons cm^-2 s^-1 keV^-1")
+	plt.xlabel("Energy (keV)")
+
+	for p in range(grpnum):
+
+		plt.plot(energy[p],flux[p])
+
+	plt.xlim([cemin,cemax])
+
+	# hardness v hard counts
+	fig.add_subplot(3,1,2)
+	plt.title("hard flux v hardness")
+	plt.ylabel("Hardness")
+	plt.xlabel("Hard photons cm^-2 s^-1")
+	plt.errorbar(modfluxhard[0],modfluxhard[4],	xerr = modfluxhard[1],  \
+			yerr = modfluxhard[5], marker='.', color = 'black', \
+				ecolor = 'grey', linestyle = 'none',capsize = 0)
+	#plt.plot(hard, hardness, marker='.', color = 'blue')
+	plt.errorbar(hard, hardness, marker='.', color = 'blue')
+	#plt.plot(shard, shardness, marker='.', color = 'green')
+
+
+	# hardness v hard counts
+	fig.add_subplot(3,1,3)
+	plt.title("hard flux v soft flux")
+	plt.ylabel("Soft photons cm^-2 s^-1")
+	plt.xlabel("Hard photons cm^-2 s^-1")
+	plt.errorbar(modfluxhard[0],modfluxhard[2],	xerr = modfluxhard[1],  \
+			yerr = modfluxhard[3], marker='.', color = 'black', \
+				ecolor = 'grey', linestyle = 'none',capsize = 0)
+	#plt.plot(hard, soft, marker='.', color = 'blue')
+	plt.errorbar(hard, soft, marker='.', color = 'blue')
+	#plt.plot(shard, ssoft, marker='.', color = 'green')
+
+
+	plt.show()
+
+
+
+

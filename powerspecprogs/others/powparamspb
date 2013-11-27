@@ -1,0 +1,3 @@
+lightcurve         background  bkg  bin  width psd min points  max lc  min lc points flux lim min+max flux    psd
+                   lightcurve level time freq bin  per psd bin  gap     to make psd   on lc?    if `y'      file name
+'5548_ami_r.qdp',   none,     0,   0.1,     1.3,      4,         100,        1,         n,     -1E6,1E6,   'prebin.dat'

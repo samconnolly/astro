@@ -1,0 +1,210 @@
+# abs+unabs.hardnessSim.py
+# Sam Connolly 19/02/2013
+
+#===============================================================================
+# calculate hardness of a spectrum with given parameters (abs + unabs PL)
+#===============================================================================
+
+# Import packages
+
+from pylab import *
+import matplotlib
+import numpy as np
+
+#================ PARAMETERS ===================================================
+
+index = 1.8		 # Power law index for both power laws
+
+norm = 1.0E-3	 # normalisation for absorbed power law
+norm2 = 1.0E-5	 # normalisation for unabsorbed power law
+
+nH = 0.1 	     # equivalent Hydrogen column density in 10^24 cm^-2
+		
+
+softmin = 0.5    # bottom energy of soft energy range (keV)
+divide  = 2.0	 # dividing energy between soft and hard (keV)
+hardmax = 10.0	 # top energy of hard energy range (keV)
+
+comp = True # compare to Xspec model data?
+
+#========== Comparison file paramaters =========================================
+
+mroute            = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/"\
+						+"ngc1365/spectra/summed/"
+
+mfilename = "modeldata1.dat"
+
+#========== Absorption parameter file ==========================================
+
+# read variables
+header = 1 # number of header lines to ignore
+mheader = 1 # number of model header lines to ignore
+
+#   File routes
+route            = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/"\
+						+"xraySpectralModelling/"
+
+# file names
+infilename 	= "absorptionXsections.dat"
+
+#===============================================================================
+
+# create file routes
+location  = route+infilename
+mlocation  = mroute+mfilename
+# read data intoarray
+
+Emin = []
+Emax = []
+c0   = []
+c1   = []
+c2   = []
+
+infile= open(location, 'r')
+
+start = 0
+
+for line in infile:
+	
+	if start >= header:
+
+		cEmin, cEmax, cc0, cc1, cc2 = line.split()
+
+		Emin.append(float(cEmin))
+		Emax.append(float(cEmax))
+		c0.append(float(cc0))
+		c1.append(float(cc1))
+		c2.append(float(cc2))
+
+	start += 1
+
+infile.close()
+
+mfile= open(mlocation, 'r')
+
+start = 0
+
+menergy = []
+mflux 	= []
+
+for line in mfile:
+	
+	if start >= mheader:
+
+		energy, flux = line.split()
+
+		menergy.append(float(energy))
+		mflux.append(float(flux))
+
+
+	start += 1
+
+mfile.close()
+
+#============= Cross sections - (c0 + c1*E + c2*E^2)*E^-3 ======================
+
+xsec = np.array([])
+
+for energy in range(len(Emin)):
+
+	xsec = np.append(xsec, ( c0[energy] + c1[energy]*Emin[energy]\
+					 + c2[energy]*(Emin[energy]**2) ) * (Emin[energy]**(-3)) )
+
+
+#============= Absorption ======================================================
+
+
+absorption = np.exp(-nH*xsec)
+
+
+#============== Create Power Law ===============================================
+
+energy = np.arange(softmin,hardmax,0.01)
+
+power = norm*(energy**(-index))
+
+
+#============= Create equivalent absorption ====================================
+
+pabsorption = np.array([])
+
+
+
+for e in energy:
+
+	fail = True
+
+	for m in range(len(Emin)-1):
+
+		if e >= Emin[m] and e < Emax[m]:
+
+			if absorption[m] > 0 and absorption[m+1] > 0:
+
+				interpol = np.log(e/Emin[m]) * \
+							(np.log(absorption[m+1]/absorption[m]) / \
+								np.log(Emax[m] / Emin[m]) ) 
+
+				pabsorption = np.append(pabsorption,\
+								np.exp(np.log(absorption[m]) + interpol) )
+
+				fail = False
+
+			else:
+
+				pabsorption = np.append(pabsorption, 0 )
+
+				fail = False
+
+	if fail == True:
+		
+		pabsorption = np.append(pabsorption,\
+							absorption[m] )
+			
+			
+
+#============ Create total spectrum (abs + non-abs) ============================
+
+abspower = power*pabsorption
+
+unabspower = norm2*(energy**(-index))
+
+total = abspower + unabspower
+
+#============ Integrate total spectrum, find hardnesses ========================
+
+divideindex = (2.0-0.5)/0.01
+
+print np.trapz(total[:divideindex])
+print np.trapz(total[divideindex:])
+print np.trapz(total)
+
+#============= Plotting ========================================================
+
+fig = plt.figure()
+
+ax = fig.add_subplot(2,1,1)
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+locs,labels = xticks()
+xticks(locs, map(lambda x: "%g" % x, locs-min(locs)))
+
+plot(energy, total)
+
+ax = fig.add_subplot(2,1,2)
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+locs,labels = xticks()
+xticks(locs, map(lambda x: "%g" % x, locs-min(locs)))
+
+plot(menergy, mflux)
+
+show()
+
+
+
+
+

@@ -1,0 +1,24 @@
+from numpy import *
+import pylab
+
+a= range(1000)
+mean = 2
+width = 25.
+nbins = 25.
+binWidth = width/nbins
+barWidth = binWidth
+
+bins = zeros(nbins)
+
+for x in a:
+
+	r = random.poisson(mean)
+		
+	n = int(r/binWidth)
+
+	if n < nbins:
+		bins[n] +=1
+
+
+pylab.bar(arange (0, width, binWidth),bins, width =barWidth)
+pylab.show()

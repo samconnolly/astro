@@ -1,0 +1,201 @@
+# Creates a power spectrum from a lightcurve and model spectrum to compare
+# by Sam Connolly 
+# Does not take into account sampling patterns (on purpose!)
+
+# modules
+import pylab as pl
+from numpy import *
+
+# Parameters 
+
+bsize    = 0.1              # bin width
+bfac     = 1.3              # PDS bin factor
+minb     = 4                # minimum points per bin
+
+# Test power law values
+
+psdindexLow  = 2.40
+psdindexHigh = 1.00 
+breakfreq    = 5.14e-5
+
+# filenames
+infname      = "5548_ami_r.qdp" # lightcurve filename
+outfname     = "lctest.dat"           # output power spectrum file name
+
+#   File route
+route      = "/disks/raid/raid1/xray/raid/sdc1g08/NetData"
+inroute    = "/amidat/refined/"
+outroute   = "/powerspecprogs/"
+
+
+# data arrays
+time    = []
+flux    = []
+fluxerr = []
+
+
+# variables
+tstart = -150
+tend   =  150
+n_bins =  100
+
+# create file routes
+inlocation  = route+inroute+infname
+outlocation = route+outroute+outfname
+
+# read data into arrays
+
+start = 0
+npoints = -1
+
+indat= open(inlocation, 'r')
+
+for y in indat:
+	currtime, currflux, currfluxerr = y.split()
+	if start == 1:
+		time.append(float(currtime))
+		flux.append(float(currflux))
+		fluxerr.append(float(currfluxerr))	
+		npoints  += 1
+	start = 1
+
+indat.close()
+
+# ------- make power spectrum ----------------------
+
+# declare arrays & values
+
+dff   = []
+freq  = []
+
+# find average flux
+avflux     = mean(flux)
+
+# calculate time range and frequency max
+dt=time[npoints]-time[0]    
+df=1.0*(dt**(-1))
+
+# power spectrum fourier transform function ----------------
+      
+def powcal(bsize, df, time, flux, npoints, avflux):
+
+	ff=[]
+	nhi=int(0.5/(bsize*df))
+
+	fr=zeros(nhi)
+	fi=zeros(nhi)
+      
+	for k in range(nhi):
+	      		
+		a=2*pi*(k+1)*df
+
+		for m in range(npoints):
+        
+			c=cos(a*time[m])
+			s=sin(a*time[m])
+			fr[k]+=((flux[m]-avflux)*c)
+			fi[k]+=((flux[m]-avflux)*s)
+        
+		ff.append( ((nhi*df)**(-1)) * (fr[k]**2+fi[k]**2)/float(npoints) )
+        	 
+	return ff, nhi
+# ---------------------------------------------------------------
+
+# calculate power spectrum
+
+ff, nhi = powcal(bsize, df, time, flux, npoints, avflux)
+
+# normalise power spectrum, create frequency array
+
+for j in range(nhi):
+		
+	dff.append(ff[j]/avflux**2)
+	freq.append(df*(j+1))
+
+freq.append(freq[-1])
+ 
+# sort the resulting array of power spectra 
+
+#sort2(nhi,freq,dff)
+
+# -- Binning function ----------------------------------------
+      
+def binps(nhi,freq,dff,minb,bfac):
+
+	jj=0
+	j1=0
+	logftot=0.0
+	ffav=0.0
+	flast=bfac*freq[0]
+	fprev=freq[0]  
+	
+	bff   = []
+	bfreq = []
+	bperr = []
+
+	for i1 in range(nhi):
+	
+		ffav=ffav+log10(dff[i1])+0.253
+		j1=j1+1
+		logftot=logftot+log10(freq[i1])
+
+		if  i1 == nhi or freq[i1+1] >= flast:
+			if  j1 >= minb:
+		
+				jj=jj+1
+				bff.append( ffav/float(j1) )
+				bfreq.append( logftot/float(j1) )
+				bperr.append(0.0)
+					
+				for k1 in range(i1-(j1-1),i1):
+				
+					bperr[-1]=bperr[-1]+(log10(dff[k1])\
+							+0.253-bff[-1])**2
+			
+				bperr[-1]=sqrt(bperr[-1]/(j1*float(j1-1)))
+	
+				fprev   =freq[i1]
+				flast   =bfac*freq[i1]
+				logftot =0.0
+				ffav    =0.0
+				j1      =0
+
+	nbfreq=jj
+        
+	return bfreq, bff, bperr       
+
+# -------------------------------------------------------------------     
+      
+#  bin the sorted array
+
+bfreq, bff, bperr = binps(nhi,freq,dff,minb,bfac)
+      
+# create comparison spectrum array
+powerlaw = piecewise(freq,  [breakfreq>=freq, freq>=breakfreq], 
+        	   [lambda freq: freq**(-psdindexLow), 		
+        	    lambda freq: (breakfreq**(psdindexHigh-psdindexLow))
+                             *(freq**(-psdindexHigh))])
+
+logfreq = []
+logpl   = []
+
+for plog in range(len(powerlaw)):
+
+	logpl.append(log10(powerlaw[plog])+0.253)
+	logfreq.append(log10(freq[plog]))
+	 
+# plot power spectrum
+pl.errorbar(bfreq,bff,bperr)
+pl.plot(logfreq,logpl)
+pl.show()
+
+
+
+
+
+
+
+
+
+
+
