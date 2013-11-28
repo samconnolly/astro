@@ -1,11 +1,19 @@
+"""
+xcorerrorcheck.py
+
+Sam Connolly, some time in 2012...
+
 #=====================================================================
 # Programme plotting spectra against one another and finding the 
 # gradient and scatter of a straight line fit in order to find errors
 #=====================================================================
 
+"""
 
 # modules
 from numpy import zeros, tan, sqrt
+
+#===================== INPUT PARAMETERS ========================================
 
 #   File routes
 route      = "/disks/raid/raid1/xray/raid/sdc1g08/NetData"
@@ -21,6 +29,8 @@ outfname    = "xcor5548errors.qdp"
 # variables
 t_start = -150
 t_end   =  150
+
+#===============================================================================
 
 trange = t_end-t_start
 

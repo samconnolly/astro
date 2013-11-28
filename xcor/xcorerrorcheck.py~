@@ -11,7 +11,7 @@ from numpy import zeros, tan, sqrt
 route      = "/disks/raid/raid1/xray/raid/sdc1g08/NetData"
 radioroute = "/amidat/refined/"
 xrayroute  = "/xte+swiftdat/"
-outroute   = "/xcor/errors/"
+outroute   = "/xcordat/errors/"
 
 # file names
 radiofname  = "5548_ami_r.qdp"
