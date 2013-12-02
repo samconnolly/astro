@@ -1,0 +1,214 @@
+# xspecmodeldataout.py
+# Sam Connolly 25/02/13
+
+# Programme to extract xspec model fluxes and the corrsesponding energies from a
+# saved xspec file, ignoring ignored channels or chosen energies, save them and plot them
+
+import os
+import pylab as plt
+import matplotlib
+import numpy as np
+
+# ============== PARAMATERS ====================================================
+
+# file route - directory containing spectra and to contain output
+route    = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/spectra/all/"
+
+# output file name
+outfile 	= "modelfluxhard.dat"
+
+# input xspec file
+infile = "9_all_extract.xcm"
+
+# spectrum to extract
+specnum = 1 # spectrum number of model to extract
+
+# energies used
+choose = True
+cemin = 0.5
+cemax = 10.0
+
+# graph?
+graph = True
+
+# ==============================================================================
+
+# --- Run Xspec modelling macro and save results ---
+
+# temporary file names
+macrofile  = "tmpmacro.tcl"
+tmpfile1   = "tmp1.dat"
+tmpfile2   = "tmp2.dat"
+tmpfile3   = "tmp3.dat"
+
+# set file locations
+macrolocation = route + macrofile
+outlocation   = route + outfile
+tmplocation1  = route + tmpfile1
+tmplocation2  = route + tmpfile2
+tmplocation3  = route + tmpfile3
+
+here = os.getcwd()
+
+# tcl macro to run on spectra
+tclmacro = \
+'puts "Starting macro..."\n\
+set outfile [open {0} w]\n\
+@{1}\n\
+fit \n\
+tclout energies {2}\n\
+puts $outfile $xspec_tclout\n\
+set outfile [open {3} w]\n\
+tclout modval {2}\n\
+puts $outfile $xspec_tclout \n\
+set outfile [open {4} w]\n\
+tclout noticed energy {2}\n\
+puts $outfile $xspec_tclout \n\
+quit\n'.format(tmpfile1,infile,specnum,tmpfile2,tmpfile3)
+
+
+# create temporary macro file
+macrofile= open(macrolocation, 'w')
+macrofile.write(str(tclmacro))
+macrofile.close()
+
+# run tcl script in xspec
+os.chdir(route)
+os.system("xspec - tmpmacro.tcl")
+
+# delete temporary macro
+os.remove(macrolocation)
+
+# ---- create output file from tmp data files ----
+
+# read in data from tmp data files
+
+tmp3 = open(tmplocation3, 'r')
+
+for line in tmp3:
+	noticed = line.split()[0]
+	 
+tmp3.close()
+
+emin = ""
+emax = ""
+dash = False
+
+for character in noticed:
+
+	if dash == True:
+		emax = emax + character
+
+	if dash == False:
+		if character == "-":
+			dash = True
+
+		else:
+			emin = emin + character
+
+emin = float(emin)
+emax = float(emax)
+
+if choose == True:
+
+	emin = cemin
+	emax = cemax
+
+flux    = []
+energy  = []
+indices = []
+
+tmp1 = open(tmplocation1, 'r')
+
+for line in tmp1:
+	linedata = line.split()
+	
+	for index in range(len(linedata)):
+		
+		if float(linedata[index]) >= emin and float(linedata[index]) <= emax:	
+			energy.append(float(linedata[index]))
+			indices.append(index)
+
+tmp1.close()
+
+tmp2 = open(tmplocation2, 'r')
+
+for line in tmp2:
+	linedata = line.split()
+
+	for index in indices:
+		flux.append(float(linedata[index])*200.0) # *200 converts from 
+												  # cnts cm^-2 s^-1 bin^-1 to 
+												  # cnts cm^-2 s^-1 keV^-1
+
+tmp2.close()
+
+#print len(energy), len(flux)
+
+# delete temporary data files
+os.remove(tmplocation1)
+os.remove(tmplocation2)
+os.remove(tmplocation3)
+
+# create new, combined data file
+
+output = open(outlocation, 'w')
+
+output.write("Energy\tFlux\n")	
+
+for i in range(len(flux)):
+	output.write(str(energy[i]))
+	output.write("\t")
+	output.write(str(flux[i]))
+	output.write("\n")
+
+output.close()
+
+#return to original directory
+os.chdir(here)
+
+# calculate hardness
+
+splitindex = 0
+hardnesssplit = 2.0
+
+for i in range(len(energy)):
+
+	if energy[i] < hardnesssplit:
+		if i > splitindex:
+
+			splitindex = i
+
+splitindex += 1
+
+
+
+s = np.trapz(flux[:splitindex])
+h = np.trapz(flux[splitindex:])
+t = np.trapz(flux)
+
+hardness = ((h - s) / (h + s))
+
+print "soft flux:", s
+print "hard flux:", h
+print "total flux:", t
+print "hardness:", hardness
+
+# plot data (logplot)
+
+if graph:
+
+	fig = plt.figure()
+
+	ax = fig.add_subplot(1,1,1)
+
+	ax.set_yscale('log')
+	ax.set_xscale('log')
+
+	ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+	plt.plot(energy,flux)
+
+	plt.show()
+
+

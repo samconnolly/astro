@@ -1,0 +1,21 @@
+import numpy as N 
+from matplotlib import pyplot as P 
+
+x = N.random.randn(100) 
+y = N.random.randn(100) 
+z = N.random.randn(100)**2 
+
+print z
+
+fig = P.figure() 
+ax = fig.add_subplot(1,1,1) 
+
+cmap = P.matplotlib.cm.jet 
+norm = P.matplotlib.colors.Normalize(vmin=0, vmax=1) 
+
+sc = ax.scatter(x,y, 
+                  c=z, 
+                  cmap=cmap, 
+                  norm=norm, 
+                  ) 
+P.show()

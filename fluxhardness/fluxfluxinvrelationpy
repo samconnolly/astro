@@ -1,0 +1,37 @@
+# fluxflux invrelation
+
+# Plots the flux flux and flux hardness graphs for a given flux flux relation:
+# SoftTotal = ((HardTotal - HardConst)/ Gradient)^(1/alpha) + SoftConst 
+# (see Taylor, Uttley McHardy, MNRAS, 2003, 342, 31) <-- INVERSE
+
+import numpy as np
+import pylab as pl
+
+# variables
+
+hconst = 0.15
+sconst = 6.08e-2
+grad   = 6.26
+alpha  = 1.0
+
+# flux arrays
+
+hard = np.arange(0.15,4.01,0.01)
+soft = ( (hard - hconst) / grad )**(1.0/alpha) + sconst
+
+# calculate hardness (H-S/H+S)
+
+hardness = (hard - soft) / (hard + soft)
+althardness = (hard - ( ( (hard - hconst) / grad )**(1.0/alpha) + sconst ) ) / \
+				(hard + ( ( (hard - hconst) / grad )**(1.0/alpha) + sconst ) )
+# plotting
+pl.subplot(2,1,1)
+pl.title("flux v flux")
+pl.plot(hard,soft)
+
+pl.subplot(2,1,2)
+pl.title("hardness v hard flux")
+pl.plot(hard,hardness)
+pl.plot(hard,althardness)
+
+pl.show()

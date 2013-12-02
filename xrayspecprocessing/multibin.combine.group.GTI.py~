@@ -1,0 +1,268 @@
+# multibin.combine.group.GTI.py
+
+# Uses the HEADAS tool addspec and grppha to sum sets of spectra, assign their
+# summed background and response files and produce a grouped spectrum
+# Uses a text file of input spectra. Does so from output file from listbinmin.py
+# The 'addspec' maximum buffer size is 20, so this is accounted for...
+# Used to have trouble with 21 in a bin. May still, or maybe with 20 now...
+
+# Sam Connolly 4/3/13
+
+import os
+import pyfits
+
+# ====================== PARAMATERS ============================================
+
+# file route - directory containing spectra and spectrum list
+inroute    = "/disks/raid/raid1/xray/raid/sdc1g08/NetData"\
+					+"/Ngc1365/spectra/gti/"
+
+outroute   = "/disks/raid/raid1/xray/raid/sdc1g08/NetData"\
+					+"/Ngc1365/spectra/gtihardbin/lowFluxTest/"
+
+# file names
+
+binfile  = 'lowSplitONE.txt'
+specfile = 'spectra.txt'
+
+
+# Grouping command (e.g. "group min 15" for min of 15 counts per bin,
+#						 "group 25 150 4" to group channels 25-150 into groups of 4
+#						 [Swift XRT has 1024 channels] )
+
+groupcommand = 'group min 15'
+
+# overwrite existing files?
+
+overwrite = False
+
+#================ Grouping Function ============================================
+
+def combinegroup(outname,move,bexpscale):
+
+	#===========================================================================
+	#  sum spectra
+	#===========================================================================
+
+	# creat sum command
+
+	# if combining already summed spectra, the rounding error avoiding
+	# factor 'bexpscale' needs to be lowered, otherwise the exposure
+	# time ends up being too high and defaulting to zero, messing it up
+
+	sumcommand = "addspec " + fname + " " + outname + " bexpscale = " + \
+						str(bexpscale) + " qaddrmf = yes"\
+						+ " qsubback = yes" + " clobber = " + str(overwrite)\
+							+ ' chatter = 0'
+
+	# add spectra
+
+	os.system(sumcommand) 
+
+	#===========================================================================
+	#  group spectra
+	#===========================================================================
+
+	#  file names
+
+	spectrum = outname + ".pha"
+	back     = outname + ".bak"
+	rmf      = outname + ".rsp"
+	output   = outname + "_grp.pha"
+
+	# overwriting or not
+
+	if overwrite == True:
+		over = '!'
+	else:
+		over = ''
+
+	# generate grppha command
+
+	gcommand = 	'grppha ' + spectrum + ' ' + over + output + ' chatter = 0' + \
+				' comm = "' + \
+				'chkey BACKFILE ' + back + \
+				' & chkey RESPFILE ' + rmf + \
+				' & ' + groupcommand + ' & exit"'
+
+	# execute command
+
+	os.system(gcommand)
+
+	if move:
+
+		# move files to output folder
+
+		movecommand = "mv " + spectrum + " " + outroute \
+						+ " & mv " + back + " " + outroute \
+							+ " & mv " + rmf + " " + outroute\
+								+ " & mv " + output + " " + outroute 
+
+		os.system(movecommand)
+
+#---------------------------------------------------------------------------
+
+#============== Grouping Loop ==================================================
+
+
+# tmp input file name/location
+fname 	= "speclist.txt"
+tmplocation = inroute + fname
+
+# get current directory, to return to
+
+originaldir = os.getcwd()
+
+# change to directory of spectra
+
+os.chdir(inroute)
+print "\n" + os.getcwd() + "\n"
+# load list of grouping lists...
+
+location  = outroute+binfile
+slocation = inroute+specfile
+
+# read data into arrays
+
+# spec file names
+
+sfile= open(slocation, 'r')
+
+sfnames = []
+
+
+for line in sfile:
+	
+	linedata = line.split()
+	
+	sfnames.append(linedata[0])
+
+sfile.close()
+
+
+
+# bins
+
+start = 0
+
+infile= open(location, 'r')
+
+groups = []
+
+
+for line in infile:
+	
+	linedata = line.split()
+
+	if linedata[0] != 'number':
+
+		if start == 0:
+		
+			groups.append([])
+			groups[-1].append(linedata[0])
+			groups[-1].append(linedata[2])
+			groups[-1].append([])
+
+		if start == 1:
+		
+			for n in linedata:
+
+				groups[-1][2].append(str(int(float(n))))
+		
+			start = -1
+
+		start += 1
+
+infile.close()
+
+
+for g in range(len(groups)):
+
+	outname = str(groups[g][0])+'.'+str(groups[g][1])+".summed" #output filename
+
+
+	if len(groups[g][2]) <= 20: # check if number of spectra in bin exceeds
+								# buffer size for addspec
+
+	
+		tmp = open(tmplocation,'w') # location of spectrum filename file for addspec
+
+
+		for spec in groups[g][2]:		# populate this
+
+			sname = sfnames[int(spec)-1] #??? Seems to be right...
+			tmp.write(sname +'\n')
+
+		tmp.close()	
+
+		combinegroup(outname,True,100)	# run command
+
+		os.remove(tmplocation) # delete tmp fname file
+
+	if len(groups[g][2]) > 20: # if it is over the buffer size, we'll need to
+								# run it a few times then combine the results
+
+		nruns = (len(groups[g][2])/20) + 1 # number of runs necessary
+		endnum = len(groups[g][2]) # number of last spec
+
+
+		for n in range(nruns):
+
+			tmp = open(tmplocation,'w') # location of spec fname file
+
+			sn = n*20
+
+			en = (n+1)*20
+
+			if en > (endnum -1):
+
+				en = endnum -1
+
+			for s in range(sn,en):		# populate this
+
+				spec = groups[g][2][s]
+				sname = sfnames[int(spec)-1]
+				tmp.write(sname +'\n')
+
+
+			tmp.close()	
+
+			tmp = open(tmplocation,'r')
+
+			for line in tmp:
+
+				print line
+
+			tmp.close()
+
+			tmpoutname = str(n) + 'tmpout'
+
+			combinegroup(tmpoutname,False,100)	# run command
+
+			os.remove(tmplocation) # delete tmp fname file
+
+
+
+		tmp = open(tmplocation,'w') # location of spec fname file
+			
+
+		for s in range(nruns):		# populate this
+
+			sname = str(n) + 'tmpout.pha'
+			
+			tmp.write(sname +'\n')
+
+		tmp.close()	
+
+		combinegroup(outname,True,10)	# run command
+
+		os.remove(tmplocation) # delete tmp fname file
+
+		os.system("rm *tmp*") # unaliasing rm is a good idea...
+	
+
+
+
+# switch back to original directory
+
+os.chdir(originaldir)

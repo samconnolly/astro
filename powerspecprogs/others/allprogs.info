@@ -1,0 +1,641 @@
+PROGRAMMES ALL LIVE IN /disks/raid/raid1/xray/xray/imh/xray8/progs
+DATA LIVES IN          /disks/raid/raid1/xray/xray/imh/xray8/powspec/ 
+                                                                   /4051/
+                                                                        /figs
+
+..and in other places like xx/fermi/
+
+We also now (2011) have Dan's version in:
+
+/disks/raid/raid1/xray/xray/imh/progs/psresp-2.0/
+
+
+
+
+
+Have to copy data into the progs directory to run the progs.
+Then out again, with figs.
+
+Best to be in the area where the data is, and run the programme from there,
+ie invoke it's full name.
+
+To read data files from different areas, make sure the character arrays 
+are big enough to hold the long path names and then input the names
+between 'name'.
+
+
+
+1. LIGHTCURVE SIMULATION
+------------------------
+
+SIMUL8.F is the basic T&K simulation prog for lightcurves.
+
+I have modified it to produce simul7 which takes the input via various
+files, rather than typing in every time. (There is also simul6. Can't remember
+what that does).
+
+INPUT FILES:
+------------
+
+SIMULPARAMS eg:
+
+n,testlc,5,22.6,0.22,y,'mod1.in',1,n,0.24,'simul_lc.qdp',4,-12
+
+generate lightcurve myself?          (genquery)          N
+if yes, file containing sampling info -  sampfl          - (sampfl.in)
+else    lightcurve file for sampling  -  (infl)          TESTLC (eg xmm lc)
+time bin size                           (bsize)          5
+  - shorter than sampling interval; resolution of lightcurve
+  - make same as sampling interval to get continuous lightcurve
+  - then need to set random offset to zero.
+mean rate                                (mean)          22.6
+approx variance                           (var)          0.22
+exponentiate (y/n)?                  (expquery)          Y
+parameter file for the underlying lc    (parfl)          MOD1.IN
+model? (bkn pow -1;knee -2;scaled -3)     (mod)          1
+apply Poission stats?                 (nsquery)          N
+background level                        (bklev)          0.24
+output lc file                          (outfl)          SIMUL_LC.QDP
+ something to do with multiple length.. (tmult)          4
+negative integer random number           (seed)          -12
+
+
+SAMPFL
+------
+Could use, as input, an existing real lightcurve in form time, flux, err.
+Simul8 would then take the sampling from the lightcurve. Or you can generate
+a sampling file; eg
+
+Input files are sampfl.in; eg 
+
+0.0 4000.0 0.01 0.0
+
+start, end times, sampling interval (eg 2 days), random offset (in
+terms of a bin size; typically about 0.2)
+
+simul8 asks for the time bin size (eg 1ksec). This is the bin size of
+the actual underlying lightcurve which will be smaller than the
+sampling bin size.
+
+
+What parameter file shall I use for the underlying lightcurve?
+
+-from pspar.in (also mod1.in)
+
+ 1    2     3    4    5   6   7   8   9
+1E10 1E-3 1E-9 1E-10 3.0 1.0 0.0 1.0 1.0
+a,   f0,  p(1).......................p(7)  
+
+MODEL 1 - BROKEN POWER-LAW (SHARP BREAK)
+----------------------------------------
+PARAMETERS:
+
+1   normalisation 
+2   at freq  
+3   high freq break 
+4   low freq break  
+5   slope above high freq break, 
+6   slope between par 3 and 4 (usually 1 - positive number), 
+7   slope below low freq break (usually 0),
+8,9 ignore last 2 params for now.
+
+If you give a variance of zero, the prog will give you a lightcurve
+which exactly matches the powerspectral parameters you gave,
+with same normalisation.
+
+If you give the variance, it changes the normalisation of the
+powerspectrum to match the given variance.
+
+If you exponentiate, the variance has to be in (fraction of the mean)**2
+[not sure if that is quite what is meant...]
+
+eg mean=22.6, variance=144
+
+[later note..]
+Then sqrt(144)/22.6 = 0.53
+and 0.53^2 = 0.28
+
+That would give 0.28 here, but make smaller as exponentiation will
+also add power. So try 0.25
+
+
+Poisson noise: background ~0 for xmm (13 for xte)
+
+MODEL 2:  KNEE MODEL; SMOOTHER FLATTENING TO ZERO SLOPE
+-------------------------------------------------------
+
+p(n) does different job in knee model
+
+a, f0, - as above
+
+1 - normalisation, as above
+2 - at freq, as above
+3 - (p1) not used
+4 - (p2) - knee frequ
+5 - (p3) - slope above knee 
+6 - (p4) - rate of flattening (2 in shot noise; rick uses 1)
+
+model 3 - not used
+
+model 4 - Lorentzian
+
+tmult - integer by which the lightcurve is larger than the 2^n size
+required to contain it.
+
+
+
+Aside: xte longish look:
+
+$white/seyf/ngc4051xmm/xte4051may01bs2_10keV.dat - 16s bins, bkg sub 
+
+in XTE time (1 Jan 1994)
+xmm time 1 Jan 1998: RGS time is ok   n0263_RGS_sub.qdp
+
+xte data in $white/seyf/ngc4051/may01long/  - fits files; need `lcurve'
+in ftools to read. There is obs - source+bkg; bkg - model; bs - bkg sub.
+Need later.
+
+
+2. POWERSPECTRAL ANALYSIS
+-------------------------
+
+MULTPOW.F and other variants.
+
+My current version reads in parameters from the file `POWPARAMS'.
+Phil's original prog (multpow_orig.f and multpow_latest_pu.f, which
+included the `nseg' parameter so that you can do PSDs in segments)
+reads data in from screen.
+
+
+POWPARAMS
+
+'n4051tot_xte.dat', - obsfl  lightcurve, in same directory: time, flux, err
+none,               - bgdfl  background lightcurve
+0,                  - bklev  background level
+10000,              - bsize  bin time
+1.3,                - bfac   psd bin factor
+10,                 - minb   min# of psd measurments in binned-up psd
+300000,             - tlim   max gap size
+10,                 - minp   min# of lc datapoints to make psd (few x10)
+n,                  - limquery  Flux limits on lc?
+-1E6,               - minflux   min flux if minquery.eq."y"
+1E6,                - maxflux   max flux if minquery.eq."y"
+'n4051tot_xte.psd'  - psfl      file to write psd to (CR at end of line)
+
+If we include the bgdfl, then obsfl is source+background.
+I presume we need to include bklev if we have a bgdfl. Not sure why
+prog doesn't calculate bklev itself. - Ah. Apparently bklev is ignored if
+you specify bgdfl.
+
+"What is the bin time, and what PS bin factor and
+minimum number of bins (minb) shall I use?"
+
+`bins' means number of individual psd measurements which will be 
+averaged to make a binned-up bin, typically at least 10
+
+
+"What maximum gap size and minimum no. of points (minp) shall I use?"
+
+min no of datapoints in lightcurve from which to make powerspectrum
+- at least a few tens
+
+
+
+Uses standard FT, not FFT so operations go as N**2 where N=no. of datapoints.
+
+Apparently can change max size of segments multpow addresses.
+
+
+See noise_sub.pl
+    gapfill.pl - and close relative, g.pl for short gaps
+    psd_reformat.pl
+    reformat.pl (for input data file)
+    
+
+Can plot with pow.sm
+
+
+multpow  - doesn't subtract noise; mean squared normalisation; searches for
+           continuous sections (can specify gap size defining gap) and makes
+           dirty ps; it then sorts the frequencies from the various ps and 
+           bins them up (log-log binning, like Iossif). Specify bin factor
+           minimum of 10 points per bin. 
+ Can specify time range and flux range
+ At present normalisation is done at end?; poss best at each section
+
+
+chips.in
+normalisation, constant(poisson noise), slope, freq of normalisation (fixed)
+1 0 1   - 1 is variable, 0 fixed
+
+Poisson noise level on PSD plots (LINEAR number, not log):
+
+noise = 2*($mean + $Background)/($mean*$mean);
+ 
+eg mean of 25; P=2x25/25^2  ie twice flux normalised by mean squared
+
+multpow2
+multpow3
+
+3. POWERSPECTRAL MODELLING
+--------------------------
+
+Make up a list of input lightcurves, eg pslc.in.
+Make up a set of model parameters,   eg psresp.in
+
+Start with fixed parameter values (ie low value in psresp.in same as
+high value) so that it finishes in ~1min and you can see that all is well.
+
+
+
+PSRESP  /disks/xray/red/pu/progs/psresp/, or my x8/progs/psresp
+------   
+
+Go to psrep directory. Type `psresp'
+
+>What lightcurve list shall I fit a power spectrum to?   (infl)
+  pslc.in  (details below)
+>What model shall I fit? (bkn pow=1,pow+knee=2,scaled=3) (mod)
+  1
+>What is the name of the fit parameters file?           (fitfl)
+ psresp.in  (details below)
+>What file suffix shall I write the results to?         (flsuf)
+ singlepow.qdp  (.qdp if you want easy plots)
+>Shall I estimate additional aliasing due to true       (alquery) 
+> bin size? (y/n)
+ y
+>Shall I include high frequency power spectrum? (y/n)   (hfquery)
+  n
+
+  if (hfquery.eq."y") then
+  "What input file, noise component and normalisation shall I use?"
+                                                      (hffl,noise(10),hfnorm)
+  "Shall I distort the high frequency model to account for windowing 
+   effects? (y/n)"                                       (distquery)
+ 
+>How many simulations should I make for each new value?  (nsim - see below)
+ 20
+>And how many trials should I use to determine          
+>the probability that the model is good?                 (ntry - see below)
+ 20
+>What seed number should I use? (negative integers only) (idum)
+ -4
+
+
+nsim
+----
+If you have, say, 3 lightcurves being fitted simultaneously, then nsim
+is the number of EACH of the lightcurves which are simulated for each
+set of trial powerspectral parameters. So if you have 3 parameters
+defining the powerspectrum, and step through each one in 10 steps,
+you would have 1000 x nsim x3 lightcurves.
+
+Typically you need at least 100, and more like 1000. The resolution of
+the confidence limits depends on how many you make. Can't really get
+beyond 99% with only 100 simulations, or 99.9 with 1000.
+
+ntry
+----
+Should be at least 10 times nsim, a big number.
+Having made all the simulated lightcurves, we don't actually chi-sq
+fit every single combination of simulated lightcurves (ie nsim^3, for 3
+lightcurves) against the data as it would take too long. What we do is
+to select, at random, one lightcurve from each of the sets of nsim
+simulated lightcurves. We select ntry combinations.
+
+You will see `nstep' on the screen as the programme progresses.
+These are just the steps through the various parameter combinations.
+There are nsim simulations at each of these steps.
+
+
+pslc.in
+-------  
+
+will have one line for each dataset for multiple fits
+(eg see /disks/xray/red/pu/seyfpow/ngc4051/pslc2.in)
+
+n4051decbs2_10_512s.dat 512.0 0.0 2048.0 1.3 2 4 0.0 3.31 512.0
+
+n4051decbs2_10_512s.dat   - input data file
+512.0                     - bin size (resolution) of simulated lcs (~1/10
+                            of data sample interval for monitoring)
+0.0                       - underlying (higher resolution) time bin, eg 64s
+                            Wouldn't use if you were then going to rebin
+                            below to more than 512.
+2048.0                    - rebinned size; eg 2 weeks for xte monitoring 
+
+You need to simulate a lightcurve with higher resolution than the data
+or you won't include the high frequency power. Hence the typical factor
+of 10 higher than the typical sampling interval of the data.
+
+The rebinned size, for monitoring, would be the typical interval between
+observations, eg 2 weeks early on. Both the simulated lcs, and the data,
+are rebinned to that size. Binning the data ensures that any periods of
+higher intensity monitoring do not overwhelm the rest of the data.
+So high intensity periods have to be fitted separately.
+
+Computationally the main time is in doing the FTs, which are not Fast-FFTs.
+So that occurs after the data have been binned up. So making lightcurves
+of ~1000 binned points, with 10,000 pre-binned points, is not unreasonable
+(at least, not on Phil's machine which is ~4x faster than mine).
+
+
+Now for the powerspectral parameters
+ 
+1.3                     - width of freq bins
+15                      - min number of points per bin
+4                       - tmult (not used in pssim2)
+0.1                     - noise level of psd in not normalised units
+                          shouldn't be zero; not a prob in monitoring
+                          as noise level is v. low. Prob at high xmm freq.
+(2xcount rate for continuous lc; otherwise <sigma**2>=integral of psd
+up to nyquist freq where sigma = size of error on lc points. So if nyquist
+freq drops at low sampling, height of noise level must rise to conserve
+power as sigma**2 is same.)
+4.31    - mean count rate
+512.0   - Used to calculate, analytically, the aliasing.
+          If bin size of simulated lc is larger than the actual
+          resolution of the data (eg in monitoring we might have obs of
+          1ksec but set bin size larger for computational speed, eg to 
+          1/5 day for the 2-d sampled lc) then
+          we can analytically calculate the extra aliasing added into
+          the powerspectrum if we know true resolution, which we set here.
+
+          For the 6hr and 2d sampled lcs, can leave it at 1ksec. However 
+          for the overall (eg mcg6) lc, binned to 1 month, put it at
+          the resolution of the simulated lc (eg 43200).
+  
+          Phil said something about it depending on how many points
+          you average to get the resultant bin. If there is only one point
+          in each bin (eg 1 point per 6hr or 2d bin), then put time at actual
+          resolution of data - 1ksec. But if there are lots of points, put
+          it at the resolution of the simulated lc (remember, that is then
+          binned up to get the lc we use).
+
+pssim.f uses tmult and simulates lc of length original*2**tmult
+pssim2.f generates very long lc, length original*n where n is number
+of times you want to simulate it, and then chops it into bits
+
+With v long lc you might have too much low freq power if you don't
+put in a low freq break, so may want pssim.f   Also memory probs
+
+psresp.in
+---------
+
+Each line is one parameter, start, end, stepsize
+If high and low values are the same, the parameter is fixed.
+For frequencies, the steps are multiplicative.
+For slopes,      the steps are additive.
+
+pmin(1),pmax(1),pstep(1) 1E-6  1E-4  1.5     high freq break
+pmin(2),pmax(2),pstep(2) 1E-11 1E-11 2.0     low freq break 
+pmin(3),pmax(3),pstep(3) 1.2   2.0   0.1     slope above high freq break
+pmin(4),pmax(4),pstep(4) 1.0   1.0   0.1     slope between high and low breaks 
+pmin(5),pmax(5),pstep(5) 0.0   0.0   0.1     slope below low freq break
+pmin(6),pmax(6),pstep(6) 1.4E5 1.4E5 1.3 -ignore: does something in some models
+pmin(7),pmax(7),pstep(7) 1.0   1.0   1.3 -ignore
+a,f0                     1E3   1E-5          normalisation and freq of norm 
+                                             -(old params 1 and 2). These params
+                                             provide start for normalisation so
+                                             can't be too far off
+conf(1),conf(2),conf(3)  0.33  0.1  0.01     confidence limits: leave 
+                                             -(1sigma, 90% and 99% confidence)
+
+Typically use steps of 0.1 or 0.05 at most for slope steps.
+
+
+
+Like models in lightcurve simulation but first 2 params missing
+
+   3    4    5   6   7   8   9
+  1E-9 1E-10 3.0 1.0 0.0 1.0 1.0
+  p(1).......................p(7)  
+
+MODEL 1 - BROKEN POWER-LAW (SHARP BREAK)
+----------------------------------------
+PARAMETERS:
+
+1   high freq break 
+2   low freq break  
+3   slope above high freq break, 
+4   slope between par 3 and 4 (usually 1 - positive number), 
+5   slope below low freq break (usually 0),
+6,7 ignore last 2 params for now.
+a   normalisation  
+f0   at freq        
+
+MODEL 2:  KNEE MODEL; SMOOTHER FLATTENING TO ZERO SLOPE
+-------------------------------------------------------
+
+1  not used
+2  knee frequ
+3  slope above knee 
+4  rate of flattening (2 in shot noise; rick uses 1)
+
+a, f0, - as above
+
+MODEL 3:  SCALED??
+------------------
+
+MODEL 4
+-------
+Powerlaw with exponential cut-off
+
+
+MODEL 5
+-------
+My gently bending powerlaw, together with exponential high frequency 
+cut-off.
+
+1 Exponential cut-off frequency
+2 Break frequency
+4 Slope below exponential break (alpha mid)
+5 Slope below lower break  (alpha low)
+
+MODEL 6
+-------
+Just my gently bending powerlaw, one break (so make parameters same
+as for just exponential)
+
+1 Break frequency
+3 Slope above break 
+4 Slope below break
+
+
+MODEL 7
+-------
+Two gently folding bends. Top bend fixed at best values of single bend 
+and then we search for a second, lower, bend.
+
+
+
+NEW MODELS
+----------
+
+Can be coded into pssim2.f under `function powgen'.
+Add under `if (mod.eq.n) then '
+
+There are 7 parameters available
+
+
+AN EXAMPLE: (25 NOV 2002)
+-----------
+
+imh@sousun8/disks/xray/xray8/imh/powspec/4051 > ../../progs/psresp/psresp
+ What lightcurve list shall I fit a power spectrum to?
+pslc2.in
+ What model shall I fit? (bkn pow=1,pow+knee=2,scaled=3)
+1
+ What is the name of the fit parameters file?
+psresp.in
+What file suffix shall I write the results to?
+nobk.dat   
+ Shall I estimate additional aliasing due to true
+ bin size? (y/n)
+y
+ Shall I include high frequency power spectrum? (y/n)
+y
+ What input file, noise component and normalisation (means the mean)
+ shall I use?
+hf4051_2_10psed.dat 29.1 3.31
+ Shall I distort the high frequency model to account
+ for windowing effects? (y/n)
+y
+ How many simulations should I make for each new value?
+100 (N, in the paper; 100 min, 400ok, 1000 better)
+ And how many trials should I use to determine
+ the probability that the model is good?
+1000 (M, needs to be about 10N)
+What see number should I use (negative integers only)
+-5
+
+In first try, it took 20s for first iteration (called modmake)
+-ie change in parameter value, eg slope in this case 
+
+Gives probabilities
+
+rn_est=    1.14832 (log of renormalisation)
+ step   7 prob =    1.00000E-03 nbins (binned bins in powerspectrum) =   27
+ for parameters     1.00000E-11    1.00000E-11  1.10000  1.00000  0.  140000.
+     1.00000
+
+
+step   16 prob =   0. nbins =   27
+ Best fit prob =     7.00000E-03 for parameters:
+     1.00000E-11    1.00000E-11    1.20000    1.00000  0.    140000.    1.00000
+ with renorm:     1.52598 and model renorm
+ and spread:     8.90001E-04    3.22761E-02
+ for parameter   3 the    0.670000% lower and
+ upper limits are:     1.00000E+20   -1.00000E+20
+ for parameter   3 the    0.900000% lower and
+ upper limits are:     1.00000E+20   -1.00000E+20
+ for parameter   3 the    0.990000% lower and
+ upper limits are:     1.00000E+20   -1.00000E+20
+
+
+spread (3.22761E-02) is spread in normalisation in log units
+(model renorm is  8.90001E-04 above) 
+
+produces a set of qdp files which you can plot, all with the
+subscript name you put in above:
+
+pow..subscript
+nfn..        nu f nu powerspec
+con13..      contour plot of params 1,3 if there is more than 1 param
+prob..       probability for every step in parameter space
+res...       results: best fit and errors
+
+END OF EXAMPLE
+
+
+ANOTHER EXAMPLE - Dec 2002
+---------------
+imh@sousun8/disks/xray/xray8/imh/powspec/4051/nov > psresp
+ What lightcurve list shall I fit a power spectrum to?
+pslc_nov.in
+ What model shall I fit? (bkn pow=1,pow+knee=2,scaled=3)
+1
+ What is the name of the fit parameters file?
+psresp.in
+ What file suffix shall I write the results to?
+test.dat
+ Shall I estimate additional aliasing due to true
+ bin size? (y/n)
+y - NEED TO DO THIS AS MOST LCS, EXCEPT CONTINUOUS ONES, HAVE A PROBLEM
+ Shall I include high frequency power spectrum? (y/n)
+y
+ What input file, noise component and normalisation
+ shall I use?
+xmm-4-10.psd, 1.7, 1.0
+ Shall I distort the high frequency model to account
+ for windowing effects? (y/n)
+n - NO, IF HIGH FREQUENCY PSD IS FROM CONTINUOUS LC, AND IF LOW FREQS
+    HAVE ALREADY BEEN CHOPPED OFF AS INCLUDING XMM LC, BINNED UP.
+ How many simulations should I make for each new value?
+300
+ And how many trials should I use to determine
+ the probability that the model is good?
+3000
+ What seed number should I use? (negative integers only)
+-3
+ Called modmake
+ Called probcalc
+
+ rn_est=   0.472323
+ step   1 prob =    0.175000 nbins =   32
+ for parameters     1.00000E-05    1.00000E-11    1.40000    1.00000  0.    140000.
+     1.00000
+ Best fit prob =    0.175000 for parameters:
+     1.00000E-05    1.00000E-11    1.40000    1.00000  0.    140000.    1.00000
+ with renorm:    0.512323 and model renorm
+ and spread:    -1.13333E-04    6.12644E-03
+
+imh@sousun8/disks/xray/xray8/imh/powspec/4051/nov > qdp pow_test.dat
+
+
+
+vFv Unfoled Plots
+-----------------
+
+On Thu, 9 May 2002, Ian McHardy wrote:
+> updated multpow with segments
+>
+> unfolding powspec prog
+
+x8/progs/UNFOLDMOD.F
+
+LOOK FOR *nFn* files
+Look in x8/powspec/4051/xte/nfn*  - how did I make these files (see above)?
+     and  /progs/psresp/
+
+For the unfolded model, use the nfn_ file as input - you need to edit out
+the QDP specific stuff in the nfn_ file, and make sure that the data are
+sitting in the correct rows.  You may also need to edit the output files
+to get data in the same row when the rows are long.
+
+For the new multpow.f, apart from including tseg in the initial list of
+questions, the change just appears to be on line 82/83, where tseg can
+trigger the power spectrum to be measured (be careful you don't save it
+over your old version, as the new one is also called multpow.f).
+
+
+My Version of unfolded plots
+-----------------------------
+
+unfoldimh - reads standard nfn files, after you have edited out the 
+            NO NO NO lines
+            Produces nice output for qdp to plot
+
+
+Also make sure that the lines are all in frequency order. If you get 
+some out of order, as you do when there are overlapping datasets, then 
+the underlying model can have multiple lines, as points are spuriously 
+joined together.
+
+
+RESIDUAL PLOTS
+--------------
+
+resids.f (currently in x8/progs and in xte/tex) works with pspar.in,
+and a data file, to make plots of del chi^2, or ratios of data
+compared to model

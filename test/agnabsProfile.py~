@@ -1,0 +1,52 @@
+# absorption profile of AGN with radius, according to Tombesi 2013
+
+import numpy as np
+import pylab as plt
+
+# M in solar masses, r in schwarzschild radii
+
+Mbh = 1E7
+
+radii = np.arange(1.,100.,0.01)
+
+def nHR(r,M):
+
+	nH = 5E18*(M**-1.)*((r)**-1.4)
+
+	return nH
+
+def XR(r):
+
+	X = 6.3E5*((r)**-0.58)
+
+	return X
+
+nHarray = []
+
+for R in radii:
+
+	nHarray.append(nHR(R,Mbh)/5E11)
+
+Xarray = []
+
+for R in radii:
+
+	Xarray.append(1./(XR(R)/(40000.)))
+
+Aarray = []
+
+for x in range(len(nHarray)):
+
+	Aarray.append(nHarray[x]*(Xarray[x]))
+
+
+plt.subplot(3,1,1)
+plt.plot(radii, nHarray)
+
+plt.subplot(3,1,2)
+plt.plot(radii, Xarray)
+
+plt.subplot(3,1,3)
+plt.plot(radii, Aarray)
+
+plt.show()

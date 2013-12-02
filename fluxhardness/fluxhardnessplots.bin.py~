@@ -1,0 +1,266 @@
+# Import packages
+
+from pylab import *
+import numpy as numpy
+#
+#===============================================================================
+# Plot flux-hardness graphs for a given time period and a model if wanted
+# Sam Connolly February 2012
+#===============================================================================
+
+# ========================= PARAMETERS =========================================
+
+# Object name
+
+objectname = "NGC1365" 
+
+#   File routes
+route           	= \
+"/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/lightcurve"
+
+times = [0,7000]
+
+# binning
+
+bins = 6 # number of bins
+plotub = True # plot unbinned data?
+
+#-- model - Fh = k*(Fs -Cs)^a + Ch ---------------------------------------------
+
+model 	= True 	# plot model?
+k 		= 5.5
+a		= 0.5
+Cs		= 0.06
+Ch		= 0.0
+
+# ==============================================================================
+
+energysoftroute  	= "/refined/"
+energyhardroute  	= "/refined/"
+
+# file names
+energysoftfname 	= objectname+"_lcurve_3_gti_0.5-2keV.qdp"
+energyhardfname		= objectname+"_lcurve_3_gti_2-10keV.qdp"
+
+
+# create file routes
+energysoftlocation 		= route+energysoftroute+energysoftfname
+energyhardlocation 		= route+energyhardroute+energyhardfname
+
+
+# Function to calculate hardness and error
+
+def hardnessflux(tmin,tmax):
+
+	# read data into 2-D arrays
+	start = 0
+
+	softtime    = numpy.array([])
+	softflux    = numpy.array([])
+	softfluxerr = numpy.array([])
+	# soft
+	energysoftin= open(energysoftlocation, 'r')
+
+	for x in energysoftin:
+	
+		currtime, currflux, currfluxerr = x.split()
+		if start == 1:
+			if float(currtime) >= tmin and float(currtime) <= tmax:
+				softtime    = numpy.append(softtime, float(currtime))
+				softflux    = numpy.append(softflux, float(currflux))
+				softfluxerr = numpy.append(softfluxerr, float(currfluxerr))	
+		start = 1
+
+	energysoftin.close()
+	# hard
+	start = 0
+
+	hardtime    = numpy.array([])
+	hardflux    = numpy.array([])
+	hardfluxerr = numpy.array([])
+
+	energyhardin= open(energyhardlocation, 'r')
+
+	for x in energyhardin:
+	
+		currtime, currflux, currfluxerr = x.split()
+		if start == 1:
+			if float(currtime) >= tmin and float(currtime) <= tmax:
+				hardtime    = numpy.append(hardtime, float(currtime))
+				hardflux    = numpy.append(hardflux, float(currflux))
+				hardfluxerr = numpy.append(hardfluxerr, float(currfluxerr))		
+		start = 1
+
+	energyhardin.close()
+
+
+
+	hardness    = hardflux/softflux
+	hardnesserr = hardness*(numpy.sqrt((hardfluxerr/hardflux)**2 + \
+			(softfluxerr/softflux)**2))
+
+	# Calculate modified hardness and error (H - S / H + S)
+
+	modhardness = (hardflux-softflux)/(hardflux+softflux)
+	sumerr = sqrt(hardfluxerr**2 + softfluxerr**2)
+	modhardnesserr = modhardness*(numpy.sqrt(\
+	(sumerr/(hardflux-softflux))**2 + (sumerr/(hardflux+softflux))**2 ) )
+
+	# sort modified hardnesses and soft flux according to hard flux
+
+	modfluxhard = [[],[],[],[],[],[]]
+	start = 0
+
+	for value in range(len(modhardness)):
+		# if it isn't the first value...
+		if start !=0:
+			for comp in range(len(modfluxhard[0])): # for each value 
+							# from the bottom up...
+				if hardflux[value] <= modfluxhard[0][comp]:# add 
+						     						 # below value if less/equal
+					modfluxhard[0].insert(comp,hardflux[value])
+					modfluxhard[1].insert(comp,hardfluxerr[value])
+					modfluxhard[2].insert(comp,softflux[value])
+					modfluxhard[3].insert(comp,softfluxerr[value])
+					modfluxhard[4].insert(comp,modhardness[value])
+					modfluxhard[5].insert(comp,modhardnesserr[value])
+					break
+				if comp == len(modfluxhard[0]) -1:  # add after last 
+								 					# element if > than all
+					modfluxhard[0].append(hardflux[value])
+					modfluxhard[1].append(hardfluxerr[value])
+					modfluxhard[2].append(softflux[value])
+					modfluxhard[3].append(softfluxerr[value])
+					modfluxhard[4].append(modhardness[value])
+					modfluxhard[5].append(modhardnesserr[value])
+
+		# if it is the first value, just fill that stuff in
+		if start == 0:
+			modfluxhard[0].append(hardflux[value])
+			modfluxhard[1].append(hardfluxerr[value])
+			modfluxhard[2].append(softflux[value])
+			modfluxhard[3].append(softfluxerr[value])
+			modfluxhard[4].append(modhardness[value])
+			modfluxhard[5].append(modhardnesserr[value])
+			start = 1
+		
+	totalflux = hardflux + softflux
+
+	return modfluxhard, totalflux, hardtime
+
+# run!
+
+modfluxhard, totalflux, time = hardnessflux(times[0],times[1])
+
+#============= Bin =============================================================
+
+hbins = [np.zeros(bins),np.zeros(bins),np.zeros(bins),
+				np.zeros(bins),np.zeros(bins),np.zeros(bins)]
+ebins = [[[] for i in range(bins)],[[] for i in range(bins)],[[] for i in range(bins)]]
+nbins = np.zeros(bins)
+
+hbinwidth = (max(modfluxhard[0])-min(modfluxhard[1]))/float(bins)
+
+for value in range(len(modfluxhard[2])):
+	
+	ibin = int((modfluxhard[0][value] - min(modfluxhard[1]))/hbinwidth)
+
+	if ibin == bins:
+		ibin = bins-1
+
+	hbins[0][ibin] += modfluxhard[0][value]
+	hbins[1][ibin] += modfluxhard[1][value]**2
+	ebins[0][ibin].append(modfluxhard[0][value])
+	
+	hbins[2][ibin] += modfluxhard[2][value]
+	hbins[3][ibin] += modfluxhard[3][value]**2
+	ebins[1][ibin].append(modfluxhard[2][value])
+
+	hbins[4][ibin] += modfluxhard[4][value]
+	hbins[5][ibin] += modfluxhard[5][value]**2
+	ebins[2][ibin].append(modfluxhard[4][value])
+	
+	nbins[ibin] += 1
+
+hbins[1] = np.sqrt(hbins[1])
+hbins[3] = np.sqrt(hbins[3])
+hbins[5] = np.sqrt(hbins[5])
+
+for n in range(len(nbins)):
+	if nbins[n] == 0:
+		nbins[n] = 1
+
+hbins[0] /= nbins
+hbins[1] /= nbins
+hbins[2] /= nbins
+hbins[3] /= nbins
+hbins[4] /= nbins
+hbins[5] /= nbins
+
+for x in range(len(hbins)):
+	for y in range(len(hbins[x])):
+		if hbins[x][y] == 0:
+
+			hbins[x][y] = 'nan'
+
+#============= Model ===========================================================
+
+if model:
+	mosoft = ((np.array(modfluxhard[0]) - Ch) / k)**(1.0/a) + Cs
+	mohardness = (np.array(modfluxhard[0]) - mosoft)/ \
+						(np.array(modfluxhard[0]) + mosoft)
+
+# ======= PLOTS ================================================================
+n = 1
+
+if plotub:
+
+	n = 2
+
+	subplot(2,2,1)
+	title("hard flux v hardness")
+	errorbar(modfluxhard[0],modfluxhard[4], xerr = modfluxhard[1], \
+				yerr = modfluxhard[5], marker='.', color = 'red', \
+					ecolor = 'grey', linestyle = 'none',capsize = 0)
+	if model:
+		plot(modfluxhard[0],mohardness, color="blue")
+
+	subplot(2,2,3)
+	title("hard flux v soft flux")
+	errorbar(modfluxhard[0],modfluxhard[2],	xerr = modfluxhard[1],  \
+				yerr = modfluxhard[3], marker='.', color = 'red', \
+					ecolor = 'grey', linestyle = 'none',capsize = 0)
+
+	if model:
+		plot(modfluxhard[0],mosoft, color="blue")
+
+subplot(2,n,n)
+title("binned hard flux v hardness")
+errorbar(hbins[0],hbins[4], xerr = hbins[1], \
+			yerr = hbins[5], marker='.', color = 'red', \
+				ecolor = 'grey', linestyle = 'none',capsize = 0)
+if model:
+	plot(modfluxhard[0],mohardness, color="blue")
+
+subplot(2,n,2**n)
+title("binned hard flux v soft flux")
+errorbar(hbins[0],hbins[2],	xerr = hbins[1],  \
+			yerr = hbins[3], marker='.', color = 'red', \
+				ecolor = 'grey', linestyle = 'none',capsize = 0)
+
+if model:
+	plot(modfluxhard[0],mosoft, color="blue")
+
+show()
+
+
+# plot bin distributions
+
+
+for i in range(bins):
+	
+	subplot(2,(bins)/2,i+1)
+	print len(ebins[2][i])
+	hist(ebins[2][i], 10)
+
+show()

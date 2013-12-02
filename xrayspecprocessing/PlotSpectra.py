@@ -1,0 +1,379 @@
+# plotSpectra.py
+# Sam Connolly 19/09/13
+
+# plots the output of xspecAllDataout+Components.py in whatever way is wanted,
+# for multiple spectra... And bin if wanted
+
+import pylab as plt
+import matplotlib
+import numpy as np
+
+# ============== PARAMATERS ====================================================
+
+# file route - directory containing spectra and to contain output
+route    = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/Ngc1365/spectra/gtihardbin/"
+
+# spectrum to extract
+specnums = [1] # numbers of spectra to extract
+
+# colour list - needs to be at least as long as the number of spectra to plot
+colours = ["red","blue","green","orange","purple","pink","black","yellow","gray",
+			"darkblue","darkgreen"]
+
+# which graphs?
+modGraph  		= True  # plot of models
+dataGraph 		= False # graph of data
+binDataGraph 		= True  # graph of binned data
+binDatacomp     	= False  # add components to binned data plot
+compGraph 		= False # add components to model plot
+
+# Model energy cutoffs
+cutoff = [7.2,7.25,8.5,8.4,9.2,7.0,7.0,7.0,7.0,7.0,7.0]
+#cutoff=[10.,10.,10.,10.,10.]
+
+# number of bins if bin graph
+
+nbins = 60   # number of bins
+
+# ==============================================================================
+#
+#				import data
+#
+#===============================================================================
+
+# setup arrays
+data		= [[[],[],[],[]] for n in range(len(specnums))]
+model		= [[[],[]] for n in range(len(specnums))]
+comp1		= [[[],[]] for n in range(len(specnums))]
+comp2		= [[[],[]] for n in range(len(specnums))]
+comp3		= [[[],[]] for n in range(len(specnums))]
+
+# import data into arrays
+for n in range(len(specnums)):
+
+	if dataGraph or binDataGraph:
+
+		# data
+		fname = route + "spec{0}.dat".format(specnums[n])
+		file1 = open(fname, 'r')
+
+		start = 0 
+
+		for line in file1:
+			linedata = line.split()
+		
+			if start > 0: # miss header
+				data[n][0].append(float(linedata[0]))
+				data[n][1].append(float(linedata[1]))
+				data[n][2].append(float(linedata[2]))
+				data[n][3].append(float(linedata[3]))
+
+			start = 1
+
+		file1.close()
+
+	if modGraph:
+
+		# model
+		fname = route + "spec{0}mod.dat".format(specnums[n])
+		file2 = open(fname, 'r')
+
+		start = 0
+
+		for line in file2:
+			linedata = line.split()
+
+			if start > 0: # miss header
+				model[n][0].append(float(linedata[0]))
+				model[n][1].append(float(linedata[1]))
+
+
+			start = 1
+
+		file2.close()
+
+	if compGraph or binDatacomp:
+	
+		# component 1
+		fname = route + "spec{0}comp1.dat".format(specnums[n])
+		file3 = open(fname, 'r')
+
+		start = 0
+
+		for line in file3:
+			linedata = line.split()
+
+			if start > 0: # miss header
+				comp1[n][0].append(float(linedata[0]))
+				comp1[n][1].append(float(linedata[1]))
+
+
+			start = 1
+
+		file3.close()
+
+		# component 2
+		fname = route + "spec{0}comp2.dat".format(specnums[n])
+		file4 = open(fname, 'r')
+
+		start = 0
+
+		for line in file4:
+			linedata = line.split()
+
+			if start > 0: # miss header
+				comp2[n][0].append(float(linedata[0]))
+				comp2[n][1].append(float(linedata[1]))
+
+
+			start = 1
+
+		file4.close()
+
+		# component 3
+		fname = route + "spec{0}comp3.dat".format(specnums[n])
+		file5 = open(fname, 'r')
+
+		start = 0
+
+		for line in file5:
+			linedata = line.split()
+
+			if start > 0: # miss header
+				comp3[n][0].append(float(linedata[0]))
+				comp3[n][1].append(float(linedata[1]))
+
+
+			start = 1
+
+		file5.close()
+
+# ==============================================================================
+#
+#				Binning
+#
+#===============================================================================
+
+if binDataGraph:
+
+	# setup steps in logspace, to ensure even binning for log plot
+
+	ehigh 		= 10.	# highest energy
+	elow		= 0.1	# lowest energy
+	loglow		= np.log(elow)	# log values thereof
+	loghigh		= np.log(ehigh)
+	logrange 	= loghigh - loglow # range in logspace
+	logstep 	= logrange/float(nbins) # steps in logspace
+
+
+	# create array of bin edges (lower and upper bounds)
+	lims = [[],[]]
+
+	for b in range(nbins):
+		lowerLim = np.exp(loglow + logstep*b)
+		upperLim	 = np.exp(loglow + logstep*(b+1))
+		lims[0].append(lowerLim)
+		lims[1].append(upperLim)
+
+	# binned data array
+	binData = [[[0 for m in range(nbins)],[0 for m in range(nbins)],
+				[0 for m in range(nbins)],[0 for m in range(nbins)],
+					[0 for m in range(nbins)]] for n in range(len(specnums))]
+
+	# bin data into bins for each spectrum
+	for s in range(len(specnums)):
+
+		for d in range(len(data[s][0])):
+
+			for l in range(len(lims[0])):
+
+				if data[s][0][d] > lims[0][l] and data[s][0][d] < lims[1][l]:
+
+					binData[s][0][l] = np.exp((np.log(lims[1][l])\
+												+np.log(lims[0][l]))/2)
+
+
+					binData[s][1][l] += data[s][1][d]
+					binData[s][2][l] += data[s][2][d]
+					binData[s][3][l] += data[s][3][d]
+					binData[s][4][l] += 1				# bin count
+
+
+	# divide out bins. x errors not working yet...
+	for s in range(len(specnums)):
+
+		b = -1
+
+		for x in range(nbins):
+
+			b += 1
+			
+			if binData[s][4][b] != 0:
+
+				# average values
+				binData[s][2][b] /= float(binData[s][4][b])
+
+				# errors 
+				binData[s][1][b] /= float(binData[s][4][b]) # NOT RIGHT
+				binData[s][3][b] /= float(binData[s][4][b]) 
+
+			else: # delete empty bins, so they aren't plotted as zeros
+
+				del binData[s][0][b]
+				del binData[s][1][b]
+				del binData[s][2][b]
+				del binData[s][3][b]
+				del binData[s][4][b]
+
+				b -= 1
+
+# ==============================================================================
+#
+#				Model & Component Cutoffs
+#
+#===============================================================================
+
+# delete the part of each model/component array past the chosen cutoff
+for s in range(len(specnums)):
+
+	
+	for m in range(len(model[s][0])):
+
+		if model[s][0][m] > cutoff[s]:
+
+			model[s][0] = model[s][0][:m]
+			model[s][1] = model[s][1][:m]
+			comp1[s][0]	= comp1[s][0][:m]
+			comp1[s][1]	= comp1[s][1][:m]
+			comp2[s][0]	= comp2[s][0][:m]
+			comp2[s][1]	= comp2[s][1][:m]
+			comp3[s][0]	= comp3[s][0][:m]
+			comp3[s][1]	= comp3[s][1][:m]
+
+			break
+
+
+
+# ==============================================================================
+#
+#				Plot
+#
+#===============================================================================
+
+graphn 	= 0
+gn		= 1
+
+if compGraph == True:
+	graphn += 1
+if dataGraph == True:
+	graphn += 1
+if binDataGraph == True:
+	graphn += 1
+
+fig = plt.figure()
+
+# data
+
+if dataGraph:
+
+	for s in range(len(specnums)):
+
+		ax = fig.add_subplot(graphn,1,1)
+
+		matplotlib.rcParams.update({'font.size': 22})
+		matplotlib.rc('xtick', labelsize=20) 
+		matplotlib.rc('ytick', labelsize=20)
+
+		ax.set_yscale('log')
+		ax.set_xscale('log')
+
+		plt.xlabel("Energy (keV)")
+		plt.ylabel("Flux (Photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)")
+
+		ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+		if modGraph:
+			plt.plot(model[s][0],model[s][1],color = colours[s])
+
+		plt.errorbar(data[s][0],data[s][2], xerr = data[s][1], yerr = data[s][3],
+						marker = '.', ecolor = 'grey', capsize = 0,
+							color = colours[s],linestyle = 'none')
+
+		plt.ylim([5E-6,1E-2])
+		plt.xlim([0.5,10.])
+
+	gn += 1
+
+if binDataGraph: # NO X ERRORS
+
+	for s in range(len(specnums)):
+
+		ax = fig.add_subplot(graphn,1,gn)
+
+		matplotlib.rcParams.update({'font.size': 22})
+		matplotlib.rc('xtick', labelsize=20) 
+		matplotlib.rc('ytick', labelsize=20)
+
+		ax.set_yscale('log')
+		ax.set_xscale('log')
+
+		plt.xlabel("Energy (keV)")
+		plt.ylabel("Flux (Photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)")
+
+		ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+		if modGraph:
+			plt.plot(model[s][0],model[s][1],color = colours[s])
+
+		plt.errorbar(binData[s][0],binData[s][2], 
+						yerr = binData[s][3],
+						marker = '.', ecolor = 'grey', capsize = 0,
+						color = colours[s],linestyle = 'none')
+      
+		if binDatacomp:
+			plt.plot(comp1[s][0],comp1[s][1],color = colours[s],linestyle = '--')
+			plt.plot(comp2[s][0],comp2[s][1],color = colours[s],linestyle = '--')
+			plt.plot(comp3[s][0],comp3[s][1],color = colours[s],linestyle = ':') 
+
+		plt.ylim([5E-6,1E-2])
+		plt.xlim([0.5,10.])
+
+	gn += 1
+	
+if compGraph:
+
+	for s in range(len(specnums)):
+
+		ax = fig.add_subplot(graphn,1,gn)
+
+		matplotlib.rcParams.update({'font.size': 22})
+		matplotlib.rc('xtick', labelsize=20) 
+		matplotlib.rc('ytick', labelsize=20)
+
+		ax.set_yscale('log')
+		ax.set_xscale('log')
+
+		plt.xlabel("Energy (keV)")
+		plt.ylabel("Flux (Photons cm$^{-2}$ s$^{-1}$ keV$^{-1}$)")
+
+		ax.xaxis.set_major_formatter(matplotlib.ticker.ScalarFormatter())
+
+		if modGraph:
+			plt.plot(model[s][0],model[s][1],color = colours[s])
+
+		if compGraph:
+			plt.plot(comp1[s][0],comp1[s][1],color = colours[s],linestyle = '--')
+			plt.plot(comp2[s][0],comp2[s][1],color = colours[s],linestyle = '--')
+			plt.plot(comp3[s][0],comp3[s][1],color = colours[s],linestyle = ':') 
+			# line styles: '_','-', '--', ':'
+
+		plt.ylim([5E-6,1E-2])
+		plt.xlim([0.5,10.])
+		
+plt.subplots_adjust(left=0.15, right=0.96, top=0.96, bottom=0.12)
+
+plt.show()
+
+
+
+

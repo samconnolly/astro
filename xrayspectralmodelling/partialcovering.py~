@@ -1,0 +1,226 @@
+# partialcovering.py
+# Sam Connolly 20/02/2013
+
+#===============================================================================
+# create hardness plots according to variations in partial covering by an
+# absorber of fixed column density
+#===============================================================================
+
+# Import packages
+
+from pylab import *
+import numpy as np
+
+#================ PARAMETERS ===================================================
+
+#--- Real Data -----------------------------------------------------------------
+
+# Object name
+
+objectname = "NGC1365" 
+
+#   File routes
+route           	= \
+"/disks/raid/raid1/xray/raid/sdc1g08/NetData/ngc1365/lightcurve"
+
+times = [0,7000]
+
+# ---- constant spectral parameters --------------------------------------------
+
+# best fit to data - index = 1.95, norm = 1.16E-2, norm2 = 2.14E-4
+
+index = 1.95	# Power law index for both power laws
+
+norm = 5.E-2	# normalisation for absorbed power law
+
+
+#-------------------------------------------------------------------------------
+
+nH = 0.01 	# equivalent Hydrogen column densities in 10^24 cm^-2
+
+softmin = 0.1   # bottom energy of soft energy range (keV)
+divide  = 2.0	# dividing energy between soft and hard (keV)
+hardmax = 10.0	# top energy of hard energy range (keV)
+
+#-- model - Fh = k*(Fs -Cs)^a + Ch ---------------------------------------------
+
+model 	= True 	# plot model?
+k 		= 5.0
+a		= 0.5
+Cs		= 0.06
+Ch		= 0.0
+
+#========== Absorption parameter file ==========================================
+
+# read variables
+header = 1 # number of header lines to ignore
+
+#   File routes
+inroute            = "/disks/raid/raid1/xray/raid/sdc1g08/NetData/"\
+						+"xraySpectralModelling/"
+
+# file names
+infilename 	= "absorptionXsections.dat"
+
+#===============================================================================
+
+# create file route
+inlocation  = inroute+infilename
+
+# read data intoarray
+
+Emin = []
+Emax = []
+c0   = []
+c1   = []
+c2   = []
+
+infile= open(inlocation, 'r')
+
+start = 0
+
+for line in infile:
+	
+	if start >= header:
+
+		cEmin, cEmax, cc0, cc1, cc2 = line.split()
+
+		Emin.append(float(cEmin))
+		Emax.append(float(cEmax))
+		c0.append(float(cc0))
+		c1.append(float(cc1))
+		c2.append(float(cc2))
+
+	start += 1
+
+infile.close()
+
+#======== Absorption curve & Cross sections - (c0 + c1*E + c2*E^2)*E^-3 ========
+
+xsec = np.array([])
+
+for energy in range(len(Emin)):
+
+	xsec = np.append(xsec, ( c0[energy] + c1[energy]*Emin[energy]\
+				+ c2[energy]*(Emin[energy]**2) ) * (Emin[energy]**(-3)) )
+
+# energy array
+	
+energy = np.arange(softmin,hardmax,0.01)
+
+#-------------------------------------------------------------------------------
+#============ SPECTRUM GENERATION AND HARDNESS CALCULATION =====================
+#-------------------------------------------------------------------------------
+
+def Hard(index,norm,fraction,nH,softmin,divide,hardmax):
+
+	#============= Absorption ==================================================
+
+	absorption = np.exp(-nH*xsec)
+
+	pabsorption = np.array([])
+
+	for e in energy:
+
+		fail = True
+
+		for m in range(len(Emin)-1):
+
+			if e >= Emin[m] and e < Emax[m]:
+
+				if absorption[m] > 0 and absorption[m+1] > 0:
+
+					interpol = np.log(e/Emin[m]) * \
+								(np.log(absorption[m+1]/absorption[m]) / \
+									np.log(Emax[m] / Emin[m]) ) 
+
+					pabsorption = np.append(pabsorption,\
+									np.exp(np.log(absorption[m]) + interpol) )
+
+					fail = False
+
+				else:
+
+					pabsorption = np.append(pabsorption, 0 )
+
+					fail = False
+
+		if fail == True:
+		
+			pabsorption = np.append(pabsorption,\
+								absorption[m+1] )
+			
+			
+
+	#============ Create total spectrum (abs + non-abs) ========================
+
+	power = norm*(energy**(-index))
+
+	abspower = power*pabsorption
+
+	unabspower = power
+
+	total = abspower*fraction + unabspower*(1.0-fraction)
+
+	#============ Integrate total spectrum, find hardnesses ====================
+
+	divideindex = (2.0-0.5)/0.01
+
+	soft =  np.trapz(total[:divideindex])
+	hard =  np.trapz(total[divideindex:])
+
+	
+	# hardness
+
+	hardness = (hard - soft) / (hard + soft)
+
+
+	return soft, hard, hardness, total 
+
+#====== carry out many simulation to create graph of hardness v hard counts ====
+
+asoft 		= np.array([])
+ahard 		= np.array([])
+ahardness 	= np.array([])
+
+subplot (3,1,1)
+
+for fraction in np.arange(0.02,1,0.02):
+
+	norm = norm	
+
+	soft,hard,hardness,total = Hard(index,norm,fraction,nH,softmin,divide,hardmax)
+
+	asoft = np.append(asoft,soft)
+	ahard = np.append(ahard,hard)
+	ahardness = np.append(ahardness, hardness)
+
+	logtotal = np.log(total)
+	logenergy = np.log(energy)
+
+	plot(logenergy,logtotal)
+
+
+
+#============= Model ===========================================================
+if model:
+	mosoft = ((ahard - Ch) / k)**(1.0/a) + Cs
+	mohardness = (ahard - mosoft)/(ahard + mosoft)
+
+#============= Plotting ========================================================
+
+
+subplot (3,1,2)
+title("hard flux v hardness")
+plot(ahard,ahardness,color ="green")
+if model:
+	plot(ahard,mohardness,color ="red")
+
+subplot (3,1,3)
+title("hard flux v soft flux")
+plot(ahard,asoft,color ="green")
+if model:
+	plot(ahard,mosoft,color ="red")
+
+show()
+
