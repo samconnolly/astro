@@ -38,7 +38,7 @@ def uv_fraction ( m, mdot, rmin, rmax, nfreq = 1000, nrings = 100, fraction = 0.
 			uvCum     (array)    Cumulative UV emission fraction at each radius
 			rdisk     (array)    Radii corresponding to these fractions	
 			rFraction (float)    Radius within which the given fraction is contained
-								
+			rMax		 (float)    Radius at which the maximum UV emission occurs					
         '''					
 
         # reference temperature of the disk
@@ -99,11 +99,20 @@ def uv_fraction ( m, mdot, rmin, rmax, nfreq = 1000, nrings = 100, fraction = 0.
                         foundFraction = True # stop looking for this fraction!
                         rFraction = rtemp[i]//Schwarz(m/MSOL)	
 																	
-        				  # print result 
-                        print "{1}% of UV emission from within {0} Rg"\
-                                   .format(rFraction,fraction)
+        				  
 
         rdisk * rmin # multiply back up to actual radius
-														
+
+        # find radius of maximum UV emission
+								
+        uvMax = max(uv)
+        iMax  = np.where(uv==uvMax)[0][0]
+        rMax  = rdisk[iMax]
+        rMax	/= Schwarz(m/MSOL)		
+		
+        # print result 
+        print "{1}% of UV emission from within {0} Rg, with maximum at {2}"\
+                     .format(rFraction,fraction,rMax)
+										
         # return cumulative uv fraction and radius arrays, fraction radius                
-        return uv, uvCum,rdisk,rFraction
+        return uv, uvCum,rdisk,rFraction, rMax
